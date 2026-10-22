@@ -1,0 +1,17 @@
+# Local Claude Code settings (may hold personal permissions)
+.claude/settings.local.json
+
+# Secrets: tokens and API keys never go in the repo
+.env
+.env.*
+.dev.vars
+
+# Cloudflare / tooling caches
+.wrangler/
+node_modules/
+__pycache__/
+
+# OS clutter
+Thumbs.db
+Desktop.ini
+.DS_Store
