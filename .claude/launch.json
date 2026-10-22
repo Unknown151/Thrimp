@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "thrimp",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8080", "--directory", "public"],
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["build.mjs", "--serve", "--port", "8080"],
       "port": 8080
     }
   ]

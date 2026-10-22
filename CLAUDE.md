@@ -1,0 +1,136 @@
+# Thrimp
+
+A browser colony sim: small colonists ("Thrimps") live, love, feud and die on their own, a storyteller throws events
+at them, and the player is a god who can step in but doesn't have to. The full design is in
+[thrimp-design.md](thrimp-design.md); the plan is in [TODO.md](TODO.md).
+
+**Owner:** Rasmus (GitHub `Unknown151`). He owns the design: lines marked **[Decided]** in the design doc are settled,
+**[Proposed]** ones are open. Ask before changing anything decided. He likes to go through bigger changes step by step,
+with choices explained in plain terms. He works both in Claude Code on the web and in the desktop app on his Windows PC.
+
+Keep this file current: update it in the same change as anything it describes.
+
+## Hard rules
+
+1. **The simulation decides, Claude narrates.** No LLM call inside the sim loop. Mechanics and pacing are hand-written.
+2. **One HTML file, vanilla JS and `<canvas>`.** No game engine, no runtime libraries or CDNs. Sprites ship as PNGs
+   next to it.
+3. **Edit `src/`, never `public/`.** `public/` is build output (gitignored), rebuilt locally and by Cloudflare.
+4. **No visible tile grid.** Invisible grids for data (walk grid, fields) are fine.
+5. **No offline catch-up.** The world only lives while the page is open.
+6. **All art is locked to Endesga 32.** Build every sprite sheet with `tools/build-sheet.ps1 -PaletteFrom` (see Art).
+7. **No secrets in the repo.** The PixelLab token is the `PIXELLAB_API_TOKEN` environment variable; `.mcp.json` only
+   names it. Future secrets go in Cloudflare's Worker settings or a gitignored `.dev.vars`.
+8. **Every run is random.** No seed sharing; the seed exists only so a save can rebuild its world.
+9. **Build and tests pass before every push.**
+
+## Git workflow
+
+- `main` is what deploys (once Cloudflare Workers Builds is connected; see TODO).
+- Work on a branch and open a PR that Rasmus merges. In the cloud, reuse one long-lived `claude/...` branch and restart
+  it from the latest `main` after each merge. On the desktop, pull `main` first: cloud PRs may have landed.
+- Commit and push only when tests pass, and on the desktop only when Rasmus asks.
+- Commits are signed `Unknown151 <12183759+Unknown151@users.noreply.github.com>` (set in this repo's git config, so
+  his real email stays private).
+
+## Build and run
+
+```
+npm install                 # Wrangler (Cloudflare's CLI); the lockfile is committed so Cloudflare uses npm
+npm --prefix test install   # Playwright for the tests
+npm run build               # node build.mjs: src/ + assets/ -> public/
+npm run dev                 # build, serve http://localhost:8080, rebuild on every change (refresh the page)
+```
+
+`build.mjs` glues `src/index.html`, `src/style.css` and `src/js/*.js` (in the order of its `SCRIPTS` list) into
+`public/index.html` and mirrors `assets/` to `public/assets/`. It refuses to write anything if:
+
+- any file, or the joined bundle, has a syntax error
+- two top-level functions share a name (legal JS, but one silently replaces the other)
+- the page contains `eval(`, `new Function`, `atob(`, `btoa(` or `String.fromCharCode`
+
+On Rasmus's PC, Node is at `C:\Program Files\nodejs` (`.claude/launch.json` uses that full path).
+Cloudflare: build command `node build.mjs`, deploy command `npx wrangler deploy`. `wrangler.jsonc` serves `./public`.
+
+## Tests
+
+`npm test` runs the Playwright suite in `test/`. Locally it drives Microsoft Edge (no browser download). In the cloud
+container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, so check new tests with
+`npx playwright test --repeat-each 10` (from `test/`) before trusting them.
+
+| Test | Checks |
+|---|---|
+| loads a playable world | 12 Thrimps, a canteen, huts, bushes, HUD shows the place name, no console errors |
+| sprite sheets load | idle (4 frames) and walk (6 frames) in all 8 directions |
+| three days | everyone eats and sleeps, nobody starves, nobody is stuck "walking" in place, work gets done |
+| routes | 200 routes across the path network never cross water, buildings or trees |
+| inspector | clicking a Thrimp opens its inspector, Esc closes it |
+| pacing | one game day simulates in under 1.5 s |
+
+**Pacing baseline:** one game day with 12 Thrimps takes about 21-25 ms in Edge on Rasmus's PC (2026-10-22).
+
+## Source map
+
+| File | What lives there |
+|---|---|
+| `src/index.html` | Page shell: HUD, speed buttons, inspector, help bar. `/*@inline ...*/` markers are filled by the build |
+| `src/style.css` | UI styling |
+| `src/js/config.js` | `CONFIG` (timing, sizes, speeds), the Endesga 32 role palette `P`, sheet layout, building types |
+| `src/js/helpers.js` | Seeded RNG, small math helpers, `weightedPick`, clock formatting, value noise, fields, `MinHeap` |
+| `src/js/names.js` | Thrimp and place name generators |
+| `src/js/world.js` | Terrain fields, walk grid, building placement, world generation |
+| `src/js/paths.js` | Path network graph, A*, route smoothing, `findRoute` |
+| `src/js/thrimp.js` | Thrimp data, needs decay, schedules, recent-activity memory |
+| `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
+| `src/js/sprites.js` | Procedural sprites (buildings, trees, bushes, emotes) and PixelLab sheet loading |
+| `src/js/ground.js` | Paints the ground once into one big pixel canvas |
+| `src/js/render.js` | Canvas, camera, y-sorted drawing, night lighting, debug overlay, name labels |
+| `src/js/ui.js` | HUD and inspector |
+| `src/js/input.js` | Mouse, wheel, keyboard, camera movement and follow |
+| `src/js/main.js` | Fixed-step main loop, `init`, the `window.thrimp` console/test handle |
+| `assets/` | Shipped art: `thrimp/idle.png`, `thrimp/walk.png`, `favicon.png` |
+| `art/` | Raw PixelLab downloads and previews (not shipped) |
+| `tools/build-sheet.ps1` | Turns PixelLab frames into a palette-locked sprite sheet |
+| `test/` | Playwright tests |
+
+## How things work (the easy-to-break parts)
+
+- **Time:** a fixed step of 20 ticks per real second at 1x, each 0.2 game minutes, so a game day is about 6 real
+  minutes. Rendering interpolates between the last two positions (`px`, `py`). Real time per frame is capped at
+  0.25 s, which is what stops catch-up after the tab was hidden.
+- **Terrain** is three smooth fields (water, forest, tint) sampled on a 4 px grid and read bilinearly. Water is
+  whatever is above the 90th percentile, so every map is about 10% water. Solids (buildings, tree trunks) live on an
+  8 px walk grid.
+- **Movement:** a sparse graph of walkable points (about 56 px apart, kept only if connected to the canteen), A* over
+  it, then waypoints are skipped wherever a straight walk is clear. `segmentClear` ignores the start point so a Thrimp
+  on an awkward spot can always walk off it.
+- **AI:** each option in `ACTIONS` scores itself; the winner builds a job, a list of steps with `start` / `update` /
+  `end`. `finishJob` runs the current step's `end` and the job's `cleanup`, which releases reservations (bushes,
+  trees, seats). Forgetting a release leaves a bush reserved forever. Needs interrupt work every 10 game minutes.
+  Jobs hold closures, so they are not saved: on load, clear jobs and let Thrimps re-decide.
+- **Sprites** are anchored at the feet (`ax`, `ay`). Sheet frames share one baseline per direction (the lowest foot
+  in any frame) so feet stay planted. Walk frames advance with distance walked, idle frames with game time.
+- **State is plain data** (objects with ids, not class instances) so it can be saved later.
+
+## Art (PixelLab)
+
+- PixelLab is connected through `.mcp.json`; the token comes from the `PIXELLAB_API_TOKEN` environment variable.
+- Base Thrimp: character `6188dae3-5df6-4f3e-b871-4ea318635c8f` (pro mode, 32 px, low top-down, 8 directions, chibi,
+  Endesga 32). Walk group `a0cad017-6fbe-49b3-a4ff-54e742c57a91`, idle group `7d1dc0ff-a3cc-414d-bb18-9b45bfddb645`.
+  New characters can pass `style_character_id` with this id to match its style.
+- Pipeline: download raw frames to `art/pixellab-raw/<character>/<animation>/<direction>/<i>.png`, then
+  `.\tools\build-sheet.ps1 -Frames <that folder> -Out assets\thrimp\<animation>.png -PaletteFrom art\pixellab-raw\<character>\rotations`.
+  Rows follow `SHEET_DIRS` in `config.js`.
+- Template animations drift off-palette (one turned the tunic red). `-PaletteFrom` snaps frames to the character's own
+  colours, which fixes that.
+- Jobs take 1-5 minutes. Use `wait_for_jobs` with a timeout of 240 s or less (longer calls time out in the client).
+- PowerShell trap: `[byte] -shl 16` stays a byte and wraps to 0. Use `$color.ToArgb()` for colour keys.
+
+## Style
+
+- Match the surrounding code: plain functions and data objects, short comments that explain why, no frameworks.
+- New source files go in the build's `SCRIPTS` list, in an order where top-level code only uses what's above it.
+
+## Next up
+
+See [TODO.md](TODO.md).

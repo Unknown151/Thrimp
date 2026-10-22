@@ -6,6 +6,16 @@
 .env.*
 .dev.vars
 
+# Rasmus's private notes
+github-setup.md
+
+# Build output: made by `node build.mjs` locally and by Cloudflare at deploy time
+public/
+
+# Test output (screenshots, traces, reports)
+test/test-results/
+test/playwright-report/
+
 # Cloudflare / tooling caches
 .wrangler/
 node_modules/

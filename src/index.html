@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thrimp</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+/*@inline style.css*/
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud" class="panel">
+  <div class="place" id="hud-place"></div>
+  <div id="hud-clock"></div>
+  <div class="dim"><span id="hud-pop"></span> · <span id="hud-food"></span> · <span id="hud-wood"></span></div>
+</div>
+
+<div id="speed" class="panel">
+  <button data-speed="0" title="Pause (Space)">II</button>
+  <button data-speed="1" title="Normal speed (1)">1×</button>
+  <button data-speed="2" title="Fast (2)">3×</button>
+  <button data-speed="3" title="Faster (3)">6×</button>
+  <button data-speed="4" title="Fastest (4)">12×</button>
+</div>
+
+<div id="inspector" class="panel">
+  <div class="head"><span class="name" id="i-name"></span><button id="i-close" title="Close (Esc)">×</button></div>
+  <div class="dim" id="i-home"></div>
+  <div class="doing" id="i-doing"></div>
+  <div class="dim" id="i-why"></div>
+  <div class="sect">Needs</div>
+  <div class="need"><span>Food</span><div class="bar"><i id="i-food"></i></div></div>
+  <div class="need"><span>Rest</span><div class="bar"><i id="i-rest"></i></div></div>
+  <div class="need"><span>Fun</span><div class="bar"><i id="i-fun"></i></div></div>
+  <div class="dim" id="i-carry" style="margin-top:8px"></div>
+  <div class="dim" id="i-likes"></div>
+  <div class="sect">Recently</div>
+  <ul id="i-recent"></ul>
+  <div class="actions"><button id="i-follow">Follow (F)</button></div>
+</div>
+
+<div id="help" class="panel">Drag to pan · Scroll to zoom · Click a Thrimp · Space pause · 1–4 speed · F follow · G debug</div>
+
+<script>
+/*@inline js*/
+</script>
+</body>
+</html>

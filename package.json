@@ -1,0 +1,14 @@
+{
+  "name": "thrimp",
+  "private": true,
+  "description": "A browser colony sim about Thrimps living, loving, feuding and dying on their own.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --serve",
+    "test": "npm --prefix test test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.152.0"
+  }
+}
