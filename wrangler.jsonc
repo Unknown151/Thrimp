@@ -1,7 +1,11 @@
-// Cloudflare Workers config: serves the static game in ./public (no server code).
+// Cloudflare Workers config: serves the built game in ./public (no server code yet).
+// Cloudflare Access guards thrimp.rsvn.dk, so the only way in is through its login.
 {
   "name": "thrimp",
   "compatibility_date": "2026-10-01",
+  "workers_dev": false,   // no workers.dev URL: it would skip the login
+  "preview_urls": false,  // same for preview URLs
+  "routes": [{ "pattern": "thrimp.rsvn.dk", "custom_domain": true }],
   "assets": {
     "directory": "./public"
   }

@@ -50,7 +50,10 @@ npm run dev                 # build, serve http://localhost:8080, rebuild on eve
 - the page contains `eval(`, `new Function`, `atob(`, `btoa(` or `String.fromCharCode`
 
 On Rasmus's PC, Node is at `C:\Program Files\nodejs` (`.claude/launch.json` uses that full path).
-Cloudflare: build command `node build.mjs`, deploy command `npx wrangler deploy`. `wrangler.jsonc` serves `./public`.
+Cloudflare: build command `node build.mjs`, deploy command `npx wrangler deploy`. `wrangler.jsonc` serves `./public`
+at `thrimp.rsvn.dk` only (`workers_dev` and `preview_urls` are off so nothing skips the login). Cloudflare Access guards
+the whole domain with an email policy and a one-time PIN. There's no Worker code yet; when one is added for `/api/*`,
+it must check the Access token (`Cf-Access-Jwt-Assertion`) itself, like Seedfall's does.
 
 ## Tests
 
