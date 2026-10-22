@@ -31,18 +31,21 @@ function dirtValue(world, x, y) {
 function placeBuilding(world, type, x, y, side = 12, front = 18) {
   const T = BUILDING_TYPES[type];
   x = Math.round(x); y = Math.round(y);
-  const rect = { x0: x - T.w / 2 - side, x1: x + T.w / 2 + side, y0: y - T.h - 10, y1: y + front };
+  const looks = (T.art || []).filter(name => objectArt[name]);
+  const look = looks.length ? pick(looks) : null;
+  const w = look ? Math.max(20, objectArt[look].width - 8) : T.w, h = T.h; // with art, the walls set the width
+  const rect = { x0: x - w / 2 - side, x1: x + w / 2 + side, y0: y - h - 10, y1: y + front };
   if (rect.x0 < 24 || rect.x1 > MAP_W - 24 || rect.y0 < 48 || rect.y1 > MAP_H - 20) return null;
   if (world.noBuild.some(r => rectsOverlap(r, rect))) return null;
   for (let yy = rect.y0; yy <= rect.y1; yy += 4)
     for (let xx = rect.x0; xx <= rect.x1; xx += 4)
       if (isWater(world, xx, yy) || world.solid[Math.floor(yy / CONFIG.CELL) * world.gw + Math.floor(xx / CONFIG.CELL)]) return null;
-  const b = { id: world.nextId++, type, label: T.label, x, y, w: T.w, h: T.h, door: { x, y: y + 5 }, sleepers: [] };
+  const b = { id: world.nextId++, type, label: T.label, art: look, x, y, w, h, door: { x, y: y + 5 }, sleepers: [] };
   world.noBuild.push(rect);
-  markSolid(world, x - T.w / 2, y - T.h, x + T.w / 2 - 1, y - 1);
+  markSolid(world, x - w / 2, y - h, x + w / 2 - 1, y - 1);
   world.buildings.push(b);
   world.byId.set(b.id, b);
-  world.dirtSpots.push({ x, y: y + 7, rx: 10, ry: 6 });
+  world.dirtSpots.push({ x, y: y + 7, rx: 10, ry: 6, building: b.id });
   return b;
 }
 
@@ -88,12 +91,12 @@ function tryGenerateWorld() {
   if (!canteen) return null;
   world.canteen = canteen;
   const ty = canteen.y + 26;
-  for (const tx of [canteen.x - 24, canteen.x + 24]) {
+  for (const tx of [canteen.x - 30, canteen.x + 30]) {
     world.tables.push({ x: tx, y: ty });
-    for (const sx of [-5, 5]) {
-      world.seats.push({ x: tx + sx, y: ty - 6, face: 'south', takenBy: 0 });
-      world.seats.push({ x: tx + sx, y: ty + 6, face: 'north', takenBy: 0 });
-    }
+    // The table is seen end-on with a bench either side; one more seat at the far end.
+    world.seats.push({ x: tx - 13, y: ty - 2, face: 'east', takenBy: 0 });
+    world.seats.push({ x: tx + 13, y: ty - 2, face: 'west', takenBy: 0 });
+    world.seats.push({ x: tx, y: ty - 14, face: 'south', takenBy: 0 });
   }
   world.dirtSpots.push({ x: canteen.x, y: ty, rx: 46, ry: 16 });
   world.crate = { x: canteen.x + canteen.w / 2 + 14, y: canteen.y + 4 };
@@ -114,7 +117,7 @@ function tryGenerateWorld() {
   if (yard) {
     yard.drop = { x: yard.x, y: yard.y + 9 };
     world.lumberyard = yard;
-    world.dirtSpots.push({ x: yard.x, y: yard.y + 4, rx: 30, ry: 12 });
+    world.dirtSpots.push({ x: yard.x, y: yard.y + 4, rx: 30, ry: 12, building: yard.id });
   }
 
   // Huts scattered loosely around the canteen.
@@ -143,8 +146,11 @@ function tryGenerateWorld() {
     if (rand() > f * f * 1.5 + 0.004) continue;
     if (isWater(world, x, y) || isWater(world, x, y - 8) || dist(x, y, cx, cy) < 160) continue;
     if (world.noBuild.some(r => x > r.x0 - 12 && x < r.x1 + 12 && y > r.y0 - 4 && y < r.y1 + 30)) continue;
-    if (nearTree(x, y, lerp(30, 13, f))) continue;
-    const tree = { id: world.nextId++, x, y, kind: f > 0.55 && chance(0.6) ? 'pine' : 'oak', variant: randInt(0, 1), wood: 3, stump: false, regrowAt: 0, reservedBy: 0 };
+    if (nearTree(x, y, lerp(34, 16, f))) continue;
+    const kind = f > 0.55 && chance(0.6) ? 'pine' : 'oak';
+    const looks = TREE_ART[kind].filter(name => objectArt[name]);
+    const tree = { id: world.nextId++, x, y, kind, variant: randInt(0, 1), art: looks.length ? pick(looks) : null,
+      wood: 3, stump: false, regrowAt: 0, reservedBy: 0 };
     world.trees.push(tree);
     const k = Math.floor(x / TB) + Math.floor(y / TB) * tcols;
     if (!treeBuckets.has(k)) treeBuckets.set(k, []);
@@ -165,7 +171,7 @@ function tryGenerateWorld() {
     for (let k = 0; k < randInt(5, 8); k++) {
       const x = Math.round(px + randRange(-38, 38)), y = Math.round(py + randRange(-26, 26));
       if (isBlocked(world, x, y) || isBlocked(world, x, y + 6) || nearTree(x, y, 14)) continue;
-      if (world.bushes.some(b => dist(b.x, b.y, x, y) < 15)) continue;
+      if (world.bushes.some(b => dist(b.x, b.y, x, y) < 20)) continue;
       if (world.noBuild.some(rc => x > rc.x0 && x < rc.x1 && y > rc.y0 && y < rc.y1 + 10)) continue;
       world.bushes.push({ id: world.nextId++, x, y, ix: x, iy: y + 6, berries: randInt(2, 6), max: 6, reservedBy: 0 });
     }
@@ -177,8 +183,9 @@ function tryGenerateWorld() {
   // Keep only resources a Thrimp can actually walk to.
   for (const tr of world.trees) {
     tr.reachable = false;
-    for (const s of chance(0.5) ? [-9, 9] : [9, -9]) {
-      const ix = tr.x + s, iy = tr.y + 1;
+    // Stand beside the roots and a little in front of the trunk, so the chopper is drawn over the tree.
+    for (const s of chance(0.5) ? [-11, 11] : [11, -11]) {
+      const ix = tr.x + s, iy = tr.y + 3;
       if (!isBlocked(world, ix, iy) && nearestVisibleNode(world, ix, iy) >= 0) { tr.ix = ix; tr.iy = iy; tr.reachable = true; break; }
     }
   }
@@ -186,6 +193,7 @@ function tryGenerateWorld() {
   if (world.bushes.length < 6) return null;
   world.buildings = world.buildings.filter(b => b === canteen || nearestVisibleNode(world, b.door.x, b.door.y) >= 0);
   if (world.lumberyard && !world.buildings.includes(world.lumberyard)) world.lumberyard = null;
+  world.dirtSpots = world.dirtSpots.filter(s => !s.building || world.buildings.some(b => b.id === s.building)); // no worn doorstep where no hut stands
 
   for (let i = 0; i < 2500 && world.shoreSpots.length < 40; i++) {
     const x = Math.round(randRange(20, MAP_W - 20)), y = Math.round(randRange(20, MAP_H - 20));

@@ -42,17 +42,42 @@ function drawThrimp(th, alpha) {
   const { x, y } = thrimpPos(th, alpha);
   const s = thrimpSprite(th), height = s.ay - (s.top || 0);
   const bob = th.moving && !thrimpAnims.walk ? (Math.floor(th.stepPhase / 5) & 1) : 0; // placeholder bounce until the walk sheet loads
-  const shake = th.working ? ((Math.floor(world.time * 3) & 1) ? 1 : -1) : 0;
+  const animated = th.working && thrimpAnims[th.working] && thrimpAnims[th.working][th.dir];
+  const shake = th.working && !animated ? ((Math.floor(world.time * 3) & 1) ? 1 : -1) : 0; // stand-in where there's no action animation
   ctx.drawImage(s.img, x - s.ax + shake, y - s.ay - bob);
   if (th.carrying) {
     if (th.carrying.kind === 'food') {
       const hx = x + (th.dir.includes('west') ? -6 : 3), hy = y - Math.round(height * 0.38) - bob;
-      ctx.fillStyle = P.berry[0]; ctx.fillRect(hx, hy, 3, 2);
-      ctx.fillStyle = P.berry[1]; ctx.fillRect(hx, hy, 1, 1); ctx.fillRect(hx + 2, hy, 1, 1);
+      const basket = art('basket');
+      if (basket) blit(basket, hx + 1, hy + 4);
+      else {
+        ctx.fillStyle = P.berry[0]; ctx.fillRect(hx, hy, 3, 2);
+        ctx.fillStyle = P.berry[1]; ctx.fillRect(hx, hy, 1, 1); ctx.fillRect(hx + 2, hy, 1, 1);
+      }
     } else {
-      blit(sprites.log, x, y - Math.round(height * 0.62) - bob);
+      blit(sprites.log, x, y - height + 2 - bob); // balanced on the head, clear of the face
     }
   }
+}
+// The lumberyard's stock as two little pyramids of logs (3-2-1, ends facing us), beside the chopping block.
+function drawWoodpile(b) {
+  const log = art('log'), block = art('chopping-block');
+  if (!log) {
+    const logs = Math.min(30, Math.ceil(world.stock.wood / 2));
+    for (let i = 0; i < logs; i++) {
+      const pile = Math.floor(i / 10), k = i % 10, row = k < 4 ? 0 : k < 7 ? 1 : k < 9 ? 2 : 3;
+      const inRow = [0, 4, 7, 9][row], col = k - inRow, rowLen = 4 - row;
+      blit(sprites.log, b.x - 16 + pile * 14 + (col - (rowLen - 1) / 2) * 4 + 6, b.y - 2 - row * 4 - pile);
+    }
+  } else {
+    const logs = Math.min(12, Math.ceil(world.stock.wood / 4));
+    for (let i = 0; i < logs; i++) {
+      const pile = Math.floor(i / 6), k = i % 6, row = k < 3 ? 0 : k < 5 ? 1 : 2;
+      const col = k - [0, 3, 5][row], rowLen = 3 - row;
+      blit(log, b.x - 30 + pile * 30 + (col - (rowLen - 1) / 2) * (log.width - 3), b.y - row * Math.round(log.height * 0.55));
+    }
+  }
+  blit(block || sprites.block, b.x + 26, b.y + 2);
 }
 function emoteFor(th) {
   if (th.emote) return th.emote.icon;
@@ -80,14 +105,16 @@ function render(alpha) {
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   for (const tr of world.trees) {
     if (!inView(tr.x, tr.y)) continue;
-    if (tr.stump) { list.push({ y: tr.y, draw: () => blit(sprites.stump, tr.x, tr.y) }); continue; }
-    shadow(tr.x, tr.y, 8, 2);
-    const s = sprites[tr.kind][tr.variant];
+    if (tr.stump) { const s = art('stump') || sprites.stump; list.push({ y: tr.y, draw: () => blit(s, tr.x, tr.y) }); continue; }
+    const s = art(tr.art) || sprites[tr.kind][tr.variant];
+    shadow(tr.x, tr.y, Math.max(8, Math.round((s.width || 16) * 0.3)), 2);
     list.push({ y: tr.y, draw: () => blit(s, tr.x, tr.y) });
   }
   for (const b of world.bushes) {
     if (!inView(b.x, b.y)) continue;
     list.push({ y: b.y, draw: () => {
+      const look = art(b.berries >= 2 ? 'bush-full' : 'bush-bare');
+      if (look) { blit(look, b.x, b.y); return; }
       const s = sprites.bush;
       blit(s, b.x, b.y);
       const n = Math.floor(b.berries), ox = b.x - s.ax, oy = b.y - s.ay;
@@ -101,23 +128,18 @@ function render(alpha) {
   for (const b of world.buildings) {
     if (!inView(b.x, b.y)) continue;
     if (b.type === 'lumberyard') {
-      list.push({ y: b.y, draw: () => {
-        const logs = Math.min(30, Math.ceil(world.stock.wood / 2));
-        for (let i = 0; i < logs; i++) {
-          const pile = Math.floor(i / 10), k = i % 10, row = k < 4 ? 0 : k < 7 ? 1 : k < 9 ? 2 : 3;
-          const inRow = [0, 4, 7, 9][row], col = k - inRow, rowLen = 4 - row;
-          blit(sprites.log, b.x - 16 + pile * 14 + (col - (rowLen - 1) / 2) * 4 + 6, b.y - 2 - row * 4 - pile);
-        }
-        blit(sprites.block, b.x + 16, b.y + 2);
-      } });
+      list.push({ y: b.y, draw: () => drawWoodpile(b) });
     } else {
-      const s = sprites[b.type];
+      const s = art(b.art) || sprites[b.type];
       list.push({ y: b.y, draw: () => blit(s, b.x, b.y) });
     }
   }
-  for (const t of world.tables) if (inView(t.x, t.y)) list.push({ y: t.y, draw: () => blit(sprites.table, t.x, t.y) });
+  const tableArt = art('table') || sprites.table;
+  for (const t of world.tables) if (inView(t.x, t.y)) list.push({ y: t.y, draw: () => blit(tableArt, t.x, t.y) });
   if (inView(world.crate.x, world.crate.y)) {
     list.push({ y: world.crate.y, draw: () => {
+      const look = art(world.stock.food >= 1 ? 'crate-full' : 'crate-empty');
+      if (look) { blit(look, world.crate.x, world.crate.y); return; }
       const s = sprites.crate, ox = world.crate.x - s.ax, oy = world.crate.y - s.ay;
       blit(s, world.crate.x, world.crate.y);
       const n = Math.min(10, Math.ceil(world.stock.food / 3));
@@ -150,7 +172,9 @@ function render(alpha) {
     blit(sprites.emotes[icon], p.x, p.y - (s.ay - (s.top || 0)) - 3);
   }
   for (const b of world.buildings) {
-    if (b.sleepers.length && inView(b.x, b.y)) blit(sprites.emotes.z, b.x + 10, b.y - sprites[b.type].ay - 2 + Math.round(Math.sin(world.time / 6) * 1.5));
+    if (!b.sleepers.length || !inView(b.x, b.y)) continue;
+    const s = art(b.art) || sprites[b.type];
+    blit(sprites.emotes.z, b.x + 10, b.y - (s.ay - (s.top || 0)) - 2 + Math.round(Math.sin(world.time / 6) * 1.5));
   }
 
   drawNight(z, tx, ty);
@@ -167,27 +191,20 @@ function drawNight(z, tx, ty) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.globalAlpha = 1;
   ctx.setTransform(z, 0, 0, z, tx, ty);
-  const lights = [];
+  // Lamplight spills out of the doorway of the canteen and of any hut with someone home in the evening.
   for (const b of world.buildings) {
-    const s = sprites[b.type];
-    if (!s || !s.windows) continue;
+    if (b.type === 'lumberyard') continue;
     const lit = b.type === 'canteen' || (b.sleepers.length > 0 && (h >= 17 || h < 0.5) && h < 23.5);
     if (!lit) continue;
-    for (const w of s.windows) lights.push({ x: b.x + w.x, y: b.y + w.y, w: w.w, h: w.h });
-  }
-  for (const L of lights) {
-    const cx = L.x + L.w / 2, cy = L.y + L.h / 2;
-    const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, 18);
+    const cx = b.door.x, cy = b.door.y - 6, r = b.type === 'canteen' ? 34 : 24;
+    const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
     grad.addColorStop(0, P.light[1]);
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.28 * dk;
+    ctx.globalAlpha = 0.32 * dk;
     ctx.fillStyle = grad;
-    ctx.fillRect(cx - 18, cy - 18, 36, 36);
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = dk;
-    ctx.fillStyle = P.light[2];
-    ctx.fillRect(L.x, L.y, L.w, L.h);
     ctx.globalAlpha = 1;
   }
 }

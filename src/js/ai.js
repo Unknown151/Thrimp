@@ -99,8 +99,9 @@ function makeEatJob(th, w) {
   return job('Looking for something to eat', [
     goTo(bush.ix, bush.iy, 'Walking to a berry bush'),
     act(15, 'Eating wild berries', {
-      begin: t => { if (bush.berries < 1) return 'fail'; t.dir = 'north'; },
+      begin: t => { if (bush.berries < 1) return 'fail'; t.dir = 'north'; t.working = 'gather'; },
       finish: t => { const n = Math.min(2, Math.floor(bush.berries)); bush.berries -= n; eat(t, 0.2 * n); },
+      end: t => { t.working = false; },
     }),
   ], { cleanup: t => releaseIfMine(bush, t) });
 }
@@ -145,7 +146,7 @@ function makeForageJob(th, w) {
   return job('Foraging berries', [
     goTo(bush.ix, bush.iy, 'Walking to a berry bush'),
     act(40, 'Picking berries', {
-      begin: t => { t.working = true; t.dir = 'north'; },
+      begin: t => { t.working = 'gather'; t.dir = 'north'; },
       each: (t, w2, dt) => {
         timer += dt;
         while (timer >= 6 && bush.berries >= 1) {
@@ -179,7 +180,7 @@ function makeChopJob(th, w) {
   return job('Chopping wood', [
     goTo(tree.ix, tree.iy, 'Walking to a tree'),
     act(45, 'Chopping a tree', {
-      begin: t => { if (tree.stump) return 'fail'; t.working = true; t.dir = tree.ix < tree.x ? 'east' : 'west'; },
+      begin: t => { if (tree.stump) return 'fail'; t.working = 'chop'; t.dir = tree.ix < tree.x ? 'east' : 'west'; },
       finish: t => {
         tree.wood--;
         if (tree.wood <= 0) { tree.stump = true; tree.regrowAt = w.time + 4 * DAY; }

@@ -29,13 +29,32 @@ test('loads a playable world with no errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('PixelLab sprite sheets load with 8 directions', async ({ page }) => {
+test('PixelLab sprite sheets load', async ({ page }) => {
   const errors = await open(page);
-  await page.waitForFunction(() => thrimp.anims.idle && thrimp.anims.walk);
-  const frames = await page.evaluate(() =>
-    Object.fromEntries(Object.entries(thrimp.anims).map(([name, dirs]) => [name, Object.values(dirs).map(f => f.length)])));
-  expect(frames.idle).toEqual(Array(8).fill(4));
-  expect(frames.walk).toEqual(Array(8).fill(6));
+  await page.waitForFunction(() => ['idle', 'walk', 'gather', 'chop'].every(k => thrimp.anims[k]));
+  const frames = await page.evaluate(() => Object.fromEntries(Object.entries(thrimp.anims).map(([name, dirs]) =>
+    [name, Object.fromEntries(Object.entries(dirs).map(([d, f]) => [d, f.length]))])));
+  const all8 = n => Object.fromEntries(['south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west'].map(d => [d, n]));
+  expect(frames.idle).toEqual(all8(4));
+  expect(frames.walk).toEqual(all8(6));
+  expect(frames.gather).toEqual(all8(5));
+  expect(frames.chop).toEqual({ east: 9, west: 9 }); // Thrimps only ever chop facing sideways
+  expect(errors).toEqual([]);
+});
+
+test('PixelLab object art loads and the world uses it', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    return {
+      missing: OBJECT_ART.filter(name => !thrimp.art[name]),
+      plainBuildings: w.buildings.filter(b => b.type !== 'lumberyard' && !b.art).map(b => b.label),
+      plainTrees: w.trees.filter(t => !t.art).length,
+    };
+  });
+  expect(r.missing).toEqual([]);
+  expect(r.plainBuildings).toEqual([]);
+  expect(r.plainTrees).toBe(0);
   expect(errors).toEqual([]);
 });
 

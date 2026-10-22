@@ -16,6 +16,7 @@ const CONFIG = {
   WALK_SPEED: 7,                  // art px per game minute
   WALK_PX_PER_FRAME: 3.5,         // walk animation advances with distance, so feet keep pace with the ground
   IDLE_MIN_PER_FRAME: 1.5,        // breathing advances with game time, so it pauses and speeds up with the sim
+  ACTION_MIN_PER_FRAME: 0.8,      // work animations (chopping, gathering) run a bit faster than breathing
 };
 const HOUR = 60, DAY = 24 * HOUR;
 const MAP_W = CONFIG.WORLD_W, MAP_H = CONFIG.WORLD_H;
@@ -38,11 +39,25 @@ const P = {
 
 // PixelLab sprite sheets: one row per direction (in this order), one column per frame.
 const SHEET_DIRS = ['south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west'];
-const THRIMP_SHEETS = { idle: 'assets/thrimp/idle.png', walk: 'assets/thrimp/walk.png' };
+// Keys are what `th.working` is set to while a Thrimp does that action ('gather', 'chop').
+const THRIMP_SHEETS = {
+  idle: 'assets/thrimp/idle.png', walk: 'assets/thrimp/walk.png',
+  gather: 'assets/thrimp/gather.png', chop: 'assets/thrimp/chop.png',
+};
 
+// PixelLab object art, one PNG each in assets/objects/. The world is generated after these load, because
+// building footprints come from the art. Anything missing falls back to the procedural placeholder.
+const OBJECT_ART = [
+  'hut-a', 'hut-b', 'hut-c', 'canteen', 'table', 'crate-full', 'crate-empty', 'log', 'chopping-block',
+  'oak-1', 'oak-2', 'oak-small', 'pine-1', 'pine-2', 'stump', 'bush-full', 'bush-bare',
+  'rocks', 'flowers', 'reeds', 'basket',
+];
+const TREE_ART = { oak: ['oak-1', 'oak-2', 'oak-small'], pine: ['pine-1', 'pine-2'] };
+
+// w and h are the footprint (solid ground) when there's no art; with art, w is the drawn width minus a margin.
 const BUILDING_TYPES = {
-  hut:        { label: 'Hut',        w: 54, h: 30 },
-  canteen:    { label: 'Canteen',    w: 100, h: 38 },
+  hut:        { label: 'Hut',        w: 54, h: 30, art: ['hut-a', 'hut-b', 'hut-c'] },
+  canteen:    { label: 'Canteen',    w: 100, h: 38, art: ['canteen'] },
   lumberyard: { label: 'Lumberyard', w: 52, h: 14 },
 };
 

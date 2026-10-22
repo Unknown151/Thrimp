@@ -59,13 +59,16 @@ $rows = foreach ($d in $dirs) {
   $single = Join-Path $Frames "$d.png"
   if (Test-Path $single) { , @($single) }
   else {
-    $files = Get-ChildItem (Join-Path $Frames $d) -Filter *.png | Sort-Object { [int]$_.BaseName } | ForEach-Object FullName
-    if (-not $files) { throw "No frames for direction '$d' in $Frames" }
-    , @($files)
+    $dirPath = Join-Path $Frames $d
+    $files = if (Test-Path $dirPath) { Get-ChildItem $dirPath -Filter *.png | Sort-Object { [int]$_.BaseName } | ForEach-Object FullName }
+    if (-not $files) { Write-Host "  no frames for ${d}: its row stays empty and the game falls back for that direction"; , @() }
+    else { , @($files) }
   }
 }
+$first = $rows | Where-Object { $_.Count } | Select-Object -First 1
+if (-not $first) { throw "No frames found in $Frames" }
 $cols = ($rows | ForEach-Object { $_.Count } | Measure-Object -Maximum).Maximum
-$probe = [System.Drawing.Bitmap]::FromFile($rows[0][0]); $size = $probe.Width; $probe.Dispose()
+$probe = [System.Drawing.Bitmap]::FromFile($first[0]); $size = $probe.Width; $probe.Dispose()
 
 $sheet = New-Object System.Drawing.Bitmap ($size * $cols), ($size * $dirs.Count), ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $snapped = 0

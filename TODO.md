@@ -7,7 +7,8 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 - [x] 1. GitHub repo, pushed with git
 - [x] 2. Files: `.gitignore`, `package.json` + lockfile, `build.mjs` with safety checks, `test/`, `CLAUDE.md`
 - [ ] 3. Claude: install the Claude GitHub App on the repo, make a cloud environment with a setup script, start a session
-- [ ] 4. Cloudflare: Workers Builds from GitHub, custom domain, Access login, (KV and secrets when needed)
+- [x] 4. Cloudflare: Workers Builds from GitHub, `thrimp.rsvn.dk`, Access login (2026-10-22)
+  - [ ] Later: KV namespace for saves, Anthropic key secret, `/api` Worker with an Access token check
 - [ ] 5. Optional: protect `main` behind the Workers Builds check; a GitHub Action that runs the tests on PRs
 
 ## Build order
@@ -21,7 +22,9 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 - [ ] 7. **Resources & pressure:** depletion, invention, relocation and splitting
 - [ ] 8. **God powers:** influence, good / bad / neutral powers, the colony's opinion of the player
 - [ ] 9. **Claude voice:** diaries, prayers, chronicle chapters, myths
-- [ ] 10. **Art pass:** started (base Thrimp, walk, breathing idle). Still procedural: buildings, trees, bushes, emotes
+- [ ] 10. **Art pass:** mostly done: Thrimp (idle, walk, gather, chop), 3 huts, canteen, table, crates, woodpile,
+  chopping block, 5 trees, stump, bushes full/bare, rocks, flowers, reeds, basket. Still procedural: the ground,
+  emote bubbles, the carried log. Later: eating/sleeping/dying animations, Thrimp variants (aging, sickness)
 - [ ] 11. **Content:** grow events toward 40, then 100
 
 ## Known issues

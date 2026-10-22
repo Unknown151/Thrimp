@@ -14,6 +14,7 @@ function select(id) {
 }
 function barColor(v) { return v > 0.5 ? 'var(--good)' : v > 0.25 ? 'var(--warn)' : 'var(--bad)'; }
 function updateUI() {
+  if (!world) return; // still loading art
   const h = hourOf(world.time);
   $('hud-place').textContent = world.placeName;
   $('hud-clock').textContent = `Day ${dayOf(world.time)} · ${fmtClock(world.time)} · ${periodName(h)}`;
@@ -51,6 +52,7 @@ function updateUI() {
 }
 
 function thrimpAt(wx, wy) {
+  if (!world) return null;
   let best = null;
   for (const th of world.thrimps) {
     if (th.hidden) continue;

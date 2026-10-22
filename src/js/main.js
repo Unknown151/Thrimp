@@ -21,8 +21,9 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-function init() {
+async function init() {
   resize();
+  await loadObjectArt(); // building footprints and meadow props come from the art
   world = generateWorld();
   sprites = buildSprites(P);
   for (const [name, src] of Object.entries(THRIMP_SHEETS)) loadThrimpSheet(name, src);
@@ -36,7 +37,7 @@ function init() {
 init();
 // Console handle for poking at the sim while developing (and for the tests in test/).
 window.thrimp = {
-  get world() { return world; }, CONFIG, setSpeed, select, anims: thrimpAnims,
+  get world() { return world; }, CONFIG, setSpeed, select, anims: thrimpAnims, art: objectArt,
   run(minutes) { // fast-forward the sim without rendering
     for (let i = Math.round(minutes / CONFIG.MIN_PER_TICK); i > 0; i--) {
       for (const th of world.thrimps) { th.px = th.x; th.py = th.y; }

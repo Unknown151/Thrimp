@@ -184,13 +184,38 @@ const thrimpAnims = {};
 function opaqueRows(c) {
   try {
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let top = -1, bottom = -1;
+    let top = -1, bottom = -1, left = c.width, right = -1;
     for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
-      if (d[(y * c.width + x) * 4 + 3] > 0) { if (top < 0) top = y; bottom = y; }
+      if (d[(y * c.width + x) * 4 + 3] > 0) {
+        if (top < 0) top = y;
+        bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
     }
-    return bottom >= 0 ? { top, bottom } : null;
-  } catch (e) { return null; } // opened from file:// the canvas is tainted; fall back to the frame box
+    return bottom >= 0 ? { top, bottom, left, right } : null; // null: an empty cell
+  } catch (e) { return undefined; } // opened from file:// the canvas is tainted; assume a full frame
 }
+
+// PixelLab object art, anchored at the bottom centre of its drawn pixels (where it meets the ground).
+const objectArt = {};
+const art = name => name && objectArt[name];
+function loadObjectArt() {
+  return Promise.all(OBJECT_ART.map(name => new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const c = makeCanvas(img.width, img.height);
+      c.getContext('2d').drawImage(img, 0, 0);
+      const b = opaqueRows(c) || { top: 0, bottom: img.height - 1, left: 0, right: img.width - 1 };
+      objectArt[name] = sprite(c, Math.round((b.left + b.right) / 2), b.bottom,
+        { top: b.top, width: b.right - b.left + 1, height: b.bottom - b.top + 1 });
+      resolve();
+    };
+    img.onerror = () => resolve(); // missing art: the procedural placeholder stays
+    img.src = `assets/objects/${name}.png`;
+  })));
+}
+// A sheet may leave rows or trailing cells empty: an animation made for only some directions, or fewer frames.
 function loadThrimpSheet(name, src) {
   const img = new Image();
   img.onload = () => {
@@ -200,8 +225,10 @@ function loadThrimpSheet(name, src) {
       for (let col = 0; col < cols; col++) {
         const c = makeCanvas(size, size);
         c.getContext('2d').drawImage(img, col * size, row * size, size, size, 0, 0, size, size);
-        frames.push({ c, rows: opaqueRows(c) });
+        const rows = opaqueRows(c);
+        if (rows !== null) frames.push({ c, rows });
       }
+      if (!frames.length) return;
       // One baseline per direction (the lowest foot in any frame) so feet stay planted while walking.
       const bottom = Math.max(...frames.map(f => f.rows ? f.rows.bottom : size - 1));
       const top = Math.min(...frames.map(f => f.rows ? f.rows.top : 0));
@@ -214,6 +241,8 @@ function loadThrimpSheet(name, src) {
 function thrimpSprite(th) {
   const walk = th.moving && thrimpAnims.walk && thrimpAnims.walk[th.dir];
   if (walk) return walk[Math.floor(th.stepPhase / CONFIG.WALK_PX_PER_FRAME) % walk.length];
+  const action = th.working && thrimpAnims[th.working] && thrimpAnims[th.working][th.dir];
+  if (action) return action[Math.floor(world.time / CONFIG.ACTION_MIN_PER_FRAME + th.id * 1.3) % action.length];
   const idle = thrimpAnims.idle && thrimpAnims.idle[th.dir];
   if (idle) return idle[Math.floor(world.time / CONFIG.IDLE_MIN_PER_FRAME + th.id * 1.7) % idle.length]; // offset per Thrimp so they don't breathe in unison
   return th.dir.startsWith('north') ? sprites.placeholder.back : sprites.placeholder.front;

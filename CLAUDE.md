@@ -18,7 +18,8 @@ Keep this file current: update it in the same change as anything it describes.
 3. **Edit `src/`, never `public/`.** `public/` is build output (gitignored), rebuilt locally and by Cloudflare.
 4. **No visible tile grid.** Invisible grids for data (walk grid, fields) are fine.
 5. **No offline catch-up.** The world only lives while the page is open.
-6. **All art is locked to Endesga 32.** Build every sprite sheet with `tools/build-sheet.ps1 -PaletteFrom` (see Art).
+6. **All art is locked to Endesga 32.** Build every sprite sheet with `tools/build-sheet.ps1` (usually with
+   `-PaletteFrom`) and make objects with the Endesga palette (see Art).
 7. **No secrets in the repo.** The PixelLab token is the `PIXELLAB_API_TOKEN` environment variable; `.mcp.json` only
    names it. Future secrets go in Cloudflare's Worker settings or a gitignored `.dev.vars`.
 8. **Every run is random.** No seed sharing; the seed exists only so a save can rebuild its world.
@@ -64,7 +65,8 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | Test | Checks |
 |---|---|
 | loads a playable world | 12 Thrimps, a canteen, huts, bushes, HUD shows the place name, no console errors |
-| sprite sheets load | idle (4 frames) and walk (6 frames) in all 8 directions |
+| sprite sheets load | idle, walk and gather in all 8 directions; chop east and west |
+| object art | every `OBJECT_ART` file loads, and every building and tree uses its art |
 | three days | everyone eats and sleeps, nobody starves, nobody is stuck "walking" in place, work gets done |
 | routes | 200 routes across the path network never cross water, buildings or trees |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
@@ -91,10 +93,10 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | `src/js/ui.js` | HUD and inspector |
 | `src/js/input.js` | Mouse, wheel, keyboard, camera movement and follow |
 | `src/js/main.js` | Fixed-step main loop, `init`, the `window.thrimp` console/test handle |
-| `assets/` | Shipped art: `thrimp/idle.png`, `thrimp/walk.png`, `favicon.png` |
-| `art/` | Raw PixelLab downloads and previews (not shipped) |
-| `tools/build-sheet.ps1` | Turns PixelLab frames into a palette-locked sprite sheet |
-| `test/` | Playwright tests |
+| `assets/` | Shipped art: `thrimp/*.png` (idle, walk, gather, chop sheets), `objects/*.png`, `favicon.png` |
+| `art/` | Raw PixelLab downloads, `pixellab-objects.json` (object name -> id), previews (not shipped) |
+| `tools/` | `build-sheet.ps1` (frames -> palette-locked sheet), `fetch-frames.ps1`, `fetch-objects.ps1` |
+| `test/` | Playwright tests; `shots.mjs` saves screenshots of a fresh world (needs `npm run dev`) |
 
 ## How things work (the easy-to-break parts)
 
@@ -125,7 +127,16 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
   `.\tools\build-sheet.ps1 -Frames <that folder> -Out assets\thrimp\<animation>.png -PaletteFrom art\pixellab-raw\<character>\rotations`.
   Rows follow `SHEET_DIRS` in `config.js`.
 - Template animations drift off-palette (one turned the tunic red). `-PaletteFrom` snaps frames to the character's own
-  colours, which fixes that.
+  colours, which fixes that. Skip `-PaletteFrom` when an animation adds a prop with new colours (the chop axe).
+- Action animations: `th.working` names the sheet (`'gather'`, `'chop'`); a sheet may cover only some directions
+  (chop is east/west only). `tools/fetch-frames.ps1` downloads one direction of an animation.
+- **Objects** (buildings, trees, bushes, props) are made with `create_object_pro_flash`: `n_directions: 1`,
+  `view: low top-down`, the full Endesga 32 `palette` (so no snapping is needed), and a `style_image` from the same
+  family (buildings use the hut, trees the oak, small props the Thrimp). Record every object in
+  `art/pixellab-objects.json`, then `tools/fetch-objects.ps1` downloads them and installs them in `assets/objects/`.
+  The game's list is `OBJECT_ART` in `config.js`; each is anchored at the bottom centre of its drawn pixels.
+- Pro Flash pads its canvas: a 96x96 hut is drawn about 45 px wide. Building footprints take the drawn width.
+- About 2 PixelLab jobs per object and 8 job slots, so queue objects about four at a time.
 - Jobs take 1-5 minutes. Use `wait_for_jobs` with a timeout of 240 s or less (longer calls time out in the client).
 - PowerShell trap: `[byte] -shl 16` stays a byte and wraps to 0. Use `$color.ToArgb()` for colour keys.
 
