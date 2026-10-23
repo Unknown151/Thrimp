@@ -49,6 +49,20 @@ const THOUGHTS = {
   made_to_work:   { label: 'Worked far too much', mood: -4, mins: 6 * HOUR },
   catharsis:      { label: 'Let it all out', mood: 12, mins: 36 * HOUR },
   inspired:       { label: 'Inspired!', mood: 8, mins: DAY },
+  // Social (social.js)
+  nice_chat:      { label: 'Had a nice chat', mood: 3, mins: 6 * HOUR },
+  awkward_chat:   { label: 'Had a grating conversation', mood: -3, mins: 6 * HOUR },
+  complimented:   { label: 'Got a compliment', mood: 3, mins: 6 * HOUR },
+  insulted:       { label: 'Got insulted', mood: -6, mins: 10 * HOUR },
+  humiliated:     { label: 'Humiliated in front of others', mood: -4, mins: 10 * HOUR },
+  rejected:       { label: 'Was turned down', mood: -6, mins: DAY },
+  new_partner:    { label: 'Fell in love', mood: 12, mins: 2 * DAY },
+  kissed:         { label: 'Shared a kiss', mood: 4, mins: 6 * HOUR },
+  got_in_fight:   { label: 'Got into a fight', mood: -10, mins: DAY },
+  beaten:         { label: 'Got beaten up', mood: -6, mins: DAY },
+  won_fight:      { label: 'Won a fight', mood: 3, mins: 12 * HOUR },
+  saw_fight:      { label: 'Saw a fight', mood: -3, mins: 8 * HOUR },
+  heartbroken:    { label: 'Heartbroken', mood: -15, mins: 3 * DAY },
   // Conditions: recomputed every refresh while they hold, so they last only as long as the cause.
   hungry:         { label: 'Hungry', mood: -6 },
   starving:       { label: 'Starving', mood: -18 },
@@ -59,6 +73,8 @@ const THOUGHTS = {
   stores_low:     { label: 'The food stores are running low', mood: -5 },
   broken_table:   { label: 'Someone smashed a canteen table', mood: -2 },
   broken_crate:   { label: 'The food crate is smashed', mood: -3 },
+  lonely:         { label: 'Lonely', mood: -5 },
+  in_love:        { label: 'In love', mood: 5 },
 };
 const MIND_EVERY = 10; // game minutes between mood refreshes
 
@@ -83,6 +99,8 @@ function conditionThoughts(th, w) {
   if (n.food < 0.1) out.push('starving'); else if (n.food < 0.3) out.push('hungry');
   if (n.rest < 0.08) out.push('exhausted'); else if (n.rest < 0.25) out.push('tired');
   if (n.fun < 0.2) out.push('bored');
+  if (n.social < 0.2) out.push('lonely');
+  if (th.partner) out.push('in_love');
   if (!th.home) out.push('homeless');
   if (hasTrait(th, 'greedy') && w.stock.food < w.thrimps.length) out.push('stores_low');
   if (w.tables.some(t => t.broken)) out.push('broken_table');
@@ -93,6 +111,7 @@ function conditionThoughts(th, w) {
 // Runs every MIND_EVERY minutes: drop old thoughts, re-check conditions, maybe break or get inspired.
 function refreshMind(th, w) {
   th.thoughts = th.thoughts.filter(t => THOUGHTS[t.id].mins && t.until > w.time); // conditions are re-added below
+  refreshRelations(th, w);
   for (const id of conditionThoughts(th, w)) th.thoughts.push({ id, mood: THOUGHTS[id].mood, until: w.time + MIND_EVERY + 1 });
   th.mood = moodOf(th, w);
   if (th.inspiration && th.inspiration.until <= w.time) { th.inspiration = null; remember(th, w, 'The inspiration faded'); }
@@ -123,6 +142,7 @@ const BREAKS = {
   wander: { label: 'Wandering off in a daze', weight: th => hasTrait(th, 'curious') ? 3 : 1, make: makeWanderOffJob },
   sulk:   { label: 'Sulking alone', weight: th => hasTrait(th, 'shy') || hasTrait(th, 'gloomy') ? 3 : 1, make: makeSulkJob },
   smash:  { label: 'Smashing things', weight: th => 0.4 + (hasTrait(th, 'hotheaded') ? 2.5 : 0) + (hasTrait(th, 'violent') ? 2.5 : 0), make: makeSmashJob },
+  lashout: { label: 'Lashing out', weight: th => (hasTrait(th, 'violent') ? 3 : 0.1) + (hasTrait(th, 'hotheaded') ? 1 : 0), make: makeLashOutJob },
 };
 function startBreak(th, w, type) {
   const options = Object.keys(BREAKS).map(k => ({ k, j: null }));

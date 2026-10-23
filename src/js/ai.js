@@ -280,6 +280,10 @@ const ACTIONS = [
     return isWorkTime(th, hourOf(w.time)) ? s * 0.7 : s + 0.3;
   } },
   { id: 'wander', make: makeWanderJob, score: th => 0.12 * traitMult(th, 'wander') },
+  { id: 'socialize', make: makeSocializeJob, score(th, w) {
+    const s = (1 - th.needs.social) * 0.7 * (hasTrait(th, 'shy') ? 0.5 : 1);
+    return isWorkTime(th, hourOf(w.time)) ? s * 0.6 : s + 0.15;
+  } },
 ];
 const workDrive = th => traitMult(th, 'work') * (th.inspiration ? 1.4 : 1);
 
@@ -310,9 +314,11 @@ function runJob(th, w, dt) {
     if (step.start && step.start(th, w) === 'fail') return finishJob(th, w, false);
   }
   const r = step.update(th, w, dt);
+  if (th.job !== j) return; // the step started something else (a fight) and replaced this job
   if (r === 'fail') return finishJob(th, w, false);
   if (r === true) {
     if (step.end) step.end(th, w);
+    if (th.job !== j) return;
     j.started = false;
     j.i++;
     if (j.i >= j.steps.length) finishJob(th, w, true);
@@ -329,7 +335,7 @@ function finishJob(th, w, ok) {
 // Needs can cut a job short: hungry mid-shift means a detour to eat.
 function checkInterrupts(th, w) {
   const type = th.job.type;
-  if (type === 'eat' || type === 'sleep' || w.time < th.nextCheck) return;
+  if (type === 'eat' || type === 'sleep' || type === 'social' || w.time < th.nextCheck) return;
   th.nextCheck = w.time + 10;
   let next = null, nextType = '', why = '';
   if (th.needs.food < 0.12) { next = makeEatJob(th, w); nextType = 'eat'; why = 'Too hungry to keep going'; }
@@ -362,5 +368,6 @@ function tick(w) {
   for (const b of w.bushes) if (b.berries < b.max) b.berries = Math.min(b.max, b.berries + dt / 240);
   if (w.tick % 50 === 0) for (const tr of w.trees) if (tr.stump && w.time >= tr.regrowAt) { tr.stump = false; tr.wood = 3; }
   if (w.crate.broken && w.stock.food >= 1) w.stock.food = Math.max(0, w.stock.food - dt / 120); // spoiling in the open
+  socialTick(w);
   for (const th of w.thrimps) updateThrimp(th, w, dt);
 }

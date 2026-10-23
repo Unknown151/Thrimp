@@ -64,7 +64,7 @@ function tryGenerateWorld() {
     stock: { food: CONFIG.START_FOOD, wood: 0 },
     buildings: [], byId: new Map(), trees: [], bushes: [], thrimps: [],
     tables: [], seats: [], shoreSpots: [], noBuild: [], dirtSpots: [],
-    names: new Set(), nextId: 1,
+    names: new Set(), nextId: 1, stats: {},
   };
   const fbmWater = makeNoise(), fbmForest = makeNoise(), fbmTint = makeNoise();
   const cx = MAP_W * randRange(0.42, 0.58), cy = MAP_H * randRange(0.42, 0.58);

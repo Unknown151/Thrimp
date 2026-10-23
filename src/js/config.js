@@ -42,7 +42,7 @@ const SHEET_DIRS = ['south', 'south-east', 'east', 'north-east', 'north', 'north
 // Keys are what `th.working` is set to while a Thrimp does that action ('gather', 'chop').
 const THRIMP_SHEETS = {
   idle: 'assets/thrimp/idle.png', walk: 'assets/thrimp/walk.png',
-  gather: 'assets/thrimp/gather.png', chop: 'assets/thrimp/chop.png',
+  gather: 'assets/thrimp/gather.png', chop: 'assets/thrimp/chop.png', fight: 'assets/thrimp/fight.png',
 };
 
 // PixelLab object art, one PNG each in assets/objects/. The world is generated after these load, because

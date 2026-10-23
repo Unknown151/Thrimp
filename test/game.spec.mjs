@@ -31,7 +31,7 @@ test('loads a playable world with no errors', async ({ page }) => {
 
 test('PixelLab sprite sheets load', async ({ page }) => {
   const errors = await open(page);
-  await page.waitForFunction(() => ['idle', 'walk', 'gather', 'chop'].every(k => thrimp.anims[k]));
+  await page.waitForFunction(() => ['idle', 'walk', 'gather', 'chop', 'fight'].every(k => thrimp.anims[k]));
   const frames = await page.evaluate(() => Object.fromEntries(Object.entries(thrimp.anims).map(([name, dirs]) =>
     [name, Object.fromEntries(Object.entries(dirs).map(([d, f]) => [d, f.length]))])));
   const all8 = n => Object.fromEntries(['south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west'].map(d => [d, n]));
@@ -39,6 +39,7 @@ test('PixelLab sprite sheets load', async ({ page }) => {
   expect(frames.walk).toEqual(all8(6));
   expect(frames.gather).toEqual(all8(5));
   expect(frames.chop).toEqual({ east: 9, west: 9 }); // Thrimps only ever chop facing sideways
+  expect(frames.fight).toEqual(all8(6));
   expect(errors).toEqual([]);
 });
 
@@ -113,13 +114,12 @@ test('a Thrimp kept miserable breaks down, then feels relief', async ({ page }) 
   const r = await page.evaluate(() => {
     const w = thrimp.world, th = w.thrimps[0];
     th.thoughts.push({ id: 'slept_rough', mood: -80, until: w.time + 3 * DAY }); // test-only misery
-    let broke = false, relief = false;
+    let relief = false;
     for (let m = 0; m < 2 * DAY && !relief; m += 10) {
       thrimp.run(10);
-      if (th.breaking) broke = true;
       if (th.thoughts.some(t => t.id === 'catharsis')) relief = true;
     }
-    return { broke, relief, breaks: th.breaks };
+    return { broke: th.breaks > 0, relief, breaks: th.breaks }; // counted, not sampled: lashing out can be over in minutes
   });
   expect(r.broke).toBe(true);
   expect(r.relief).toBe(true);
@@ -161,6 +161,80 @@ test('the inspector shows mood, traits and thoughts', async ({ page }) => {
   await expect(page.locator('#i-traits span')).toHaveCount(th.traits);
   await expect(page.locator('#i-thoughts li')).toHaveCount(th.thoughts);
   await expect(page.locator('#hud-mood')).toContainText('Colony mood');
+  expect(errors).toEqual([]);
+});
+
+test('left alone for three days, Thrimps meet, talk and form opinions', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    thrimp.run(3 * DAY);
+    const ops = w.thrimps.flatMap(t => Object.values(t.opinions));
+    return { chats: w.stats.chat || 0, known: ops.length, strong: ops.filter(o => Math.abs(o) >= 15).length,
+      remembering: w.thrimps.filter(t => t.memories.length).length };
+  });
+  expect(r.chats).toBeGreaterThan(30);
+  expect(r.known).toBeGreaterThan(60);       // most of the 132 possible pairs have met
+  expect(r.strong).toBeGreaterThan(5);       // some feelings have grown either way
+  expect(errors).toEqual([]);
+});
+
+test('a fight hurts both fighters and a bystander remembers it', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    thrimp.run(4 * HOUR); // mid-morning: everyone up and about
+    const [a, b, c] = w.thrimps.filter(t => !t.hidden && !t.asleep);
+    const spot = { x: w.canteen.door.x, y: w.canteen.door.y + 30 };
+    [a, b, c].forEach((t, i) => { if (t.job) finishJob(t, w, true); t.x = t.px = spot.x + i * 12; t.y = t.py = spot.y; });
+    buildSpatialHash(w);
+    meetFirst(a, b); // a first impression forms on meeting; measure the fight's effect from there
+    const before = opinionOf(a, b);
+    startFight(a, b, w);
+    thrimp.run(20);
+    const has = (t, id) => t.thoughts.some(x => x.id === id);
+    return {
+      bothShaken: has(a, 'got_in_fight') && has(b, 'got_in_fight'),
+      grudge: (b.grudges[a.id] || 0) >= 2,
+      opinionDropped: opinionOf(a, b) <= before - 19, // -20 for the fight, less a sliver of forgiveness since
+      witnessRemembers: c.memories.some(m => m.text.startsWith('Saw ') && m.about === a.id) && has(c, 'saw_fight'),
+      counted: w.stats.fight === 1,
+    };
+  });
+  expect(r).toEqual({ bothShaken: true, grudge: true, opinionDropped: true, witnessRemembers: true, counted: true });
+  expect(errors).toEqual([]);
+});
+
+test('two Thrimps in love become partners, and a soured love ends', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, [a, b] = w.thrimps;
+    a.opinions[b.id] = 80; b.opinions[a.id] = 80;
+    buildSpatialHash(w);
+    doSocial(a, b, w, 'flirt');
+    const paired = a.partner === b.id && b.partner === a.id && a.thoughts.some(t => t.id === 'new_partner');
+    a.opinions[b.id] = -20; // a has had enough
+    thrimp.run(20);
+    return { paired, splitUp: !a.partner && !b.partner, heartbroken: b.thoughts.some(t => t.id === 'heartbroken') };
+  });
+  expect(r).toEqual({ paired: true, splitUp: true, heartbroken: true });
+  expect(errors).toEqual([]);
+});
+
+test('the inspector lists relationships, and clicking one selects that Thrimp', async ({ page }) => {
+  const errors = await open(page);
+  const who = await page.evaluate(() => {
+    thrimp.run(DAY);
+    const t = thrimp.world.thrimps.find(t => Object.keys(t.opinions).length >= 2);
+    thrimp.select(t.id);
+    return t.name;
+  });
+  await expect(page.locator('#i-name')).toHaveText(who);
+  const first = page.locator('#i-rels li').first();
+  await expect(first).toBeVisible();
+  const other = await first.locator('.who').textContent();
+  await first.dispatchEvent('pointerdown');
+  await expect(page.locator('#i-name')).toHaveText(other);
   expect(errors).toEqual([]);
 });
 
