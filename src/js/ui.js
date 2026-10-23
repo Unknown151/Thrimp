@@ -7,9 +7,16 @@ function setSpeed(i) {
   game.speedIndex = i;
   updateUI();
 }
+// One thing is selected at a time: a Thrimp (game.selected, its id) or a building, site, bush or tree (game.thing).
 function select(id) {
   game.selected = id;
+  if (id) game.thing = null;
   if (!id) cam.follow = false;
+  updateUI();
+}
+function selectThing(t) {
+  game.thing = t;
+  if (t) { game.selected = 0; cam.follow = false; }
   updateUI();
 }
 function barColor(v) { return v > 0.5 ? 'var(--good)' : v > 0.25 ? 'var(--warn)' : 'var(--bad)'; }
@@ -33,12 +40,15 @@ function updateUI() {
   }).join('\n');
   document.querySelectorAll('#speed button').forEach(b => b.classList.toggle('on', +b.dataset.speed === game.speedIndex));
 
+  $('jump-toggle').textContent = `Jump there: ${game.jump ? 'on' : 'off'}`;
+  updateThingPanel();
   const th = world.thrimps.find(t => t.id === game.selected);
   $('inspector').style.display = th ? 'block' : 'none';
   if (!th) return;
   const home = world.byId.get(th.home);
   const step = th.job && th.job.steps[th.job.i];
-  $('i-name').textContent = th.name;
+  if ($('i-rename').hidden) $('i-name').textContent = th.name;
+  else if ($('i-rename').dataset.who !== String(th.id)) finishRename(false); // selection moved on mid-rename
   $('i-home').textContent = `${home ? 'Lives in ' + home.label : 'Homeless'} · up ${fmtClock(th.schedule.wake * HOUR)} · bed ${fmtClock(th.schedule.bed * HOUR)}`;
   $('i-doing').textContent = step ? step.label : 'Thinking about what to do';
   $('i-why').textContent = th.job ? th.job.title : '';
@@ -61,7 +71,7 @@ function updateUI() {
     traitsEl.replaceChildren(...th.traits.map(t => {
       const s = document.createElement('span');
       s.textContent = TRAITS[t].label;
-      s.title = TRAITS[t].desc;
+      s.dataset.trait = t; // hovering shows TRAIT_EFFECTS (showTraitTip)
       return s;
     }));
   }
@@ -123,4 +133,190 @@ function thrimpAt(wx, wy) {
     if (wx >= th.x - 8 && wx <= th.x + 8 && wy >= top - 2 && wy <= th.y + 3 && (!best || th.y > best.y)) best = th;
   }
   return best;
+}
+
+// ============================================================
+// THINGS: clicking buildings, building sites, bushes and trees
+// ============================================================
+// The drawn area of a sprite placed at (x, y), anchored at its bottom centre.
+function spriteBox(s, x, y) {
+  const w = s.width || s.img.width, h = s.ay - (s.top || 0) + 1;
+  return { x0: x - w / 2, x1: x + w / 2, y0: y - h, y1: y + 2 };
+}
+function thingAt(wx, wy) {
+  if (!world) return null;
+  const hits = [];
+  const test = (kind, id, y, box) => { if (wx >= box.x0 && wx <= box.x1 && wy >= box.y0 && wy <= box.y1) hits.push({ kind, id, y }); };
+  for (const s of world.sites) {
+    const look = art(SITE_STAGES[siteStage(s)]);
+    test('site', s.id, s.p.y, look ? spriteBox(look, s.p.x, s.p.y) : { x0: s.p.x - s.p.w / 2, x1: s.p.x + s.p.w / 2, y0: s.p.y - s.p.h, y1: s.p.y });
+  }
+  for (const b of world.buildings) {
+    if (b.type === 'lumberyard') test('building', b.id, b.y, { x0: b.x - 50, x1: b.x + 40, y0: b.y - 34, y1: b.y + 6 });
+    else test('building', b.id, b.y, spriteBox(art(b.art) || sprites[b.type], b.x, b.y));
+  }
+  for (const b of world.bushes) test('bush', b.id, b.y, spriteBox(art('bush-full') || sprites.bush, b.x, b.y));
+  for (const t of world.trees) {
+    const s = t.stump ? (art('stump') || sprites.stump) : (art(t.art) || sprites[t.kind][t.variant]);
+    test('tree', t.id, t.y, spriteBox(s, t.x, t.y));
+  }
+  hits.sort((a, b) => b.y - a.y); // the one drawn in front
+  return hits[0] || null;
+}
+function findThing(t) {
+  if (!t) return null;
+  if (t.kind === 'building') return world.byId.get(t.id);
+  if (t.kind === 'site') return world.sites.find(s => s.id === t.id);
+  if (t.kind === 'bush') return world.bushes.find(b => b.id === t.id);
+  if (t.kind === 'tree') return world.trees.find(x => x.id === t.id);
+  return null;
+}
+
+const namesOf = list => list.map(th => ({ id: th.id, name: th.name }));
+function updateThingPanel() {
+  let obj = findThing(game.thing);
+  if (!obj && game.thing && game.thing.kind === 'site') {
+    // The site became a hut: follow it there.
+    const hut = world.buildings.find(b => b.fromSite === game.thing.id);
+    if (hut) { game.thing = { kind: 'building', id: hut.id }; obj = hut; }
+  }
+  if (!obj) { if (game.thing) game.thing = null; $('thing').style.display = 'none'; return; }
+  $('thing').style.display = 'block';
+  const rows = []; // [label, value] where value is text or a list of {id, name} links
+  const doing = (test) => world.thrimps.filter(t => t.job && test(t));
+  let title = '';
+  const k = game.thing.kind;
+  if (k === 'building' && obj.type === 'hut') {
+    title = obj.label;
+    const residents = world.thrimps.filter(t => t.home === obj.id);
+    rows.push(['Home of', residents.length ? namesOf(residents) : 'nobody yet']);
+    const inside = world.thrimps.filter(t => t.hidden && t.home === obj.id);
+    rows.push(['Inside now', inside.length ? namesOf(inside) : 'nobody']);
+    if (obj.builtDay) rows.push(['Built', [`day ${obj.builtDay} by `, ...namesOf(obj.builtBy.map(id => byId(world, id)).filter(Boolean))]]);
+    else rows.push(['Built', 'before anyone remembers']);
+  } else if (k === 'building' && obj.type === 'canteen') {
+    title = 'The canteen';
+    rows.push(['Food in store', `${Math.floor(world.stock.food)} berries${world.crate.broken ? ' (crate smashed: spoiling!)' : ''}`]);
+    const smashed = world.tables.filter(t => t.broken).length;
+    rows.push(['Tables', `${world.tables.length}${smashed ? ` (${smashed} smashed)` : ''}`]);
+    rows.push(['Seats taken', `${world.seats.filter(s => s.takenBy).length} of ${world.seats.filter(s => !s.table.broken).length}`]);
+    rows.push(['Eating now', namesOf(doing(t => t.job.type === 'eat' && t.job.steps[t.job.i].label === 'Eating at the canteen'))]);
+  } else if (k === 'building' && obj.type === 'lumberyard') {
+    title = 'The lumberyard';
+    rows.push(['Wood stacked', `${world.stock.wood} logs`]);
+    rows.push(['Chopping now', namesOf(doing(t => t.job.type === 'chop'))]);
+  } else if (k === 'site') {
+    title = 'A hut going up';
+    rows.push(['For', namesOf(obj.owners.map(id => byId(world, id)).filter(Boolean))]);
+    rows.push(['Progress', `stage ${siteStage(obj) + 1} of 3, ${Math.round(obj.work / HUT_WORK * 100)}%`]);
+    rows.push(['Wood delivered', `${obj.woodIn} of ${HUT_WOOD} logs`]);
+    rows.push(['Working on it', namesOf(doing(t => t.job.type === 'build'))]);
+    rows.push(['Started', `day ${dayOf(obj.started)}`]);
+  } else if (k === 'bush') {
+    title = 'Berry bush';
+    const n = Math.floor(obj.berries), regrow = 240; // minutes per berry (tick in ai.js)
+    rows.push(['Berries', `${n} of ${obj.max}`]);
+    rows.push(['Ready to pick', obj.berries >= 2 ? 'now' : `in about ${fmtLeft((2 - obj.berries) * regrow)}`]);
+    rows.push(['Full again', obj.berries >= obj.max ? 'it is full' : `in about ${fmtLeft((obj.max - obj.berries) * regrow)}`]);
+    const picker = obj.reservedBy && byId(world, obj.reservedBy);
+    if (picker) rows.push(['Being picked by', namesOf([picker])]);
+  } else if (k === 'tree') {
+    title = obj.stump ? 'Tree stump' : obj.kind === 'pine' ? 'Pine' : 'Oak';
+    if (obj.stump) rows.push(['Grows back', `in about ${fmtLeft(Math.max(1, obj.regrowAt - world.time))}`]);
+    else rows.push(['Wood left', `${obj.wood * 2} logs (${obj.wood} more chopping${obj.wood > 1 ? 's' : ''})`]);
+    const chopper = obj.reservedBy && byId(world, obj.reservedBy);
+    if (chopper) rows.push(['Being chopped by', namesOf([chopper])]);
+  }
+  $('t-name').textContent = title;
+  $('t-body').replaceChildren(...rows.map(([label, value]) => {
+    const row = document.createElement('div'), lbl = document.createElement('span');
+    row.className = 'row'; lbl.className = 'lbl'; lbl.textContent = label + ': ';
+    row.append(lbl);
+    const parts = Array.isArray(value) ? value : [value];
+    if (Array.isArray(value) && !value.length) row.append('nobody');
+    parts.forEach((p, i) => {
+      if (typeof p === 'string') { row.append(p); return; }
+      const a = document.createElement('span');
+      a.className = 'who'; a.dataset.id = p.id; a.textContent = p.name;
+      row.append(a);
+      if (i < parts.length - 1 && typeof parts[i + 1] !== 'string') row.append(', ');
+    });
+    return row;
+  }));
+}
+
+// ============================================================
+// ALERTS: show what happened; when allowed, slow to 1x and pan over
+// ============================================================
+const JUMP_COOLDOWN_MS = 20000; // never yank the camera more often than this
+let toastTimer = 0;
+function showToast(text) {
+  const t = $('toast');
+  t.textContent = text;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 6000);
+}
+function processAlerts(now) {
+  if (!world.alerts || !world.alerts.length) return;
+  const a = world.alerts.pop(); // the latest one is what's worth seeing
+  world.alerts.length = 0;
+  showToast(a.text);
+  if (!game.jump || now - game.lastJump < JUMP_COOLDOWN_MS) return;
+  game.lastJump = now;
+  if (game.speedIndex > 1) setSpeed(1);
+  cam.follow = false;
+  cam.target = { x: a.x, y: a.y - 10 };
+  if (a.who.length) select(a.who[0]);
+}
+function setJump(on) {
+  game.jump = on;
+  try { localStorage.setItem('thrimp.jump', on ? '1' : '0'); } catch (e) { /* storage unavailable: just not remembered */ }
+  updateUI();
+}
+function loadJumpSetting() {
+  try { game.jump = localStorage.getItem('thrimp.jump') !== '0'; } catch (e) { game.jump = true; }
+}
+
+// ============================================================
+// TRAIT TOOLTIP and RENAMING
+// ============================================================
+function showTraitTip(trait, x, y) {
+  const tip = $('tooltip'), T = TRAITS[trait];
+  const b = document.createElement('b'), ul = document.createElement('ul');
+  b.textContent = T.label;
+  ul.replaceChildren(...TRAIT_EFFECTS[trait].map(e => { const li = document.createElement('li'); li.textContent = e; return li; }));
+  tip.replaceChildren(b, ul);
+  tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.max(8, Math.min(x - r.width - 12, viewW - r.width - 8)) + 'px';
+  tip.style.top = Math.max(8, Math.min(y + 12, viewH - r.height - 8)) + 'px';
+}
+function hideTraitTip() { $('tooltip').hidden = true; }
+
+function startRename() {
+  const th = world.thrimps.find(t => t.id === game.selected);
+  if (!th) return;
+  const input = $('i-rename');
+  input.dataset.who = th.id;
+  input.value = th.name;
+  input.hidden = false;
+  $('i-name').hidden = true;
+  input.focus();
+  input.select();
+}
+function finishRename(keep) {
+  const input = $('i-rename');
+  if (input.hidden) return;
+  const th = world.thrimps.find(t => t.id === +input.dataset.who);
+  const name = input.value.trim().replace(/\s+/g, ' ').slice(0, 20);
+  if (keep && th && name && name !== th.name && !world.thrimps.some(t => t !== th && t.name === name)) {
+    world.names.delete(th.name);
+    remember(th, world, `Became known as ${name}`);
+    th.name = name;
+    world.names.add(name);
+  }
+  input.hidden = true;
+  $('i-name').hidden = false;
+  updateUI();
 }

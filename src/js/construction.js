@@ -118,6 +118,7 @@ function completeSite(w, site) {
   w.sites = w.sites.filter(s => s !== site);
   const hut = addBuilding(w, site.p);
   hut.label = `Hut ${w.buildings.filter(b => b.type === 'hut').length}`;
+  Object.assign(hut, { builtDay: dayOf(w.time), builtBy: site.owners, fromSite: site.id }); // for the hut's info panel
   const owners = site.owners.map(id => byId(w, id)).filter(Boolean);
   for (const o of owners) {
     o.home = hut.id;

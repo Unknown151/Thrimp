@@ -11,16 +11,18 @@ canvas.addEventListener('pointermove', e => {
   const w = screenToWorld(e.clientX, e.clientY);
   const th = thrimpAt(w.x, w.y);
   game.hovered = th ? th.id : 0;
-  if (!drag) return;
+  if (!drag) { canvas.style.cursor = th || thingAt(w.x, w.y) ? 'pointer' : ''; return; }
   const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-  if (!drag.moved && Math.hypot(dx, dy) > 4) { drag.moved = true; cam.follow = false; canvas.classList.add('dragging'); }
+  if (!drag.moved && Math.hypot(dx, dy) > 4) { drag.moved = true; cam.follow = false; cam.target = null; canvas.classList.add('dragging'); }
   if (drag.moved) { cam.x = drag.cx - dx / cam.zoom; cam.y = drag.cy - dy / cam.zoom; }
 });
 canvas.addEventListener('pointerup', e => {
   if (drag && !drag.moved) {
+    // A Thrimp in front wins; otherwise whatever building, site, bush or tree is under the pointer.
     const w = screenToWorld(e.clientX, e.clientY);
     const th = thrimpAt(w.x, w.y);
-    select(th ? th.id : 0);
+    if (th) select(th.id);
+    else { const t = thingAt(w.x, w.y); if (t) selectThing({ kind: t.kind, id: t.id }); else { select(0); selectThing(null); } }
   }
   drag = null;
   canvas.classList.remove('dragging');
@@ -43,7 +45,7 @@ window.addEventListener('keydown', e => {
   else if ('1234'.includes(k) && k.length === 1) setSpeed(+k);
   else if (k === 'g') game.debug = !game.debug;
   else if (k === 'f') { if (game.selected) { cam.follow = !cam.follow; updateUI(); } }
-  else if (k === 'escape') select(0);
+  else if (k === 'escape') { select(0); selectThing(null); }
   else keys.add(k);
 });
 window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
@@ -58,13 +60,36 @@ $('i-rels').addEventListener('pointerdown', e => {
   if (li) select(+li.dataset.id);
 });
 $('i-follow').addEventListener('click', e => { cam.follow = !cam.follow; updateUI(); e.currentTarget.blur(); });
+$('t-close').addEventListener('click', () => selectThing(null));
+$('t-body').addEventListener('pointerdown', e => {
+  const who = e.target.closest('[data-id]');
+  if (who) select(+who.dataset.id);
+});
+$('jump-toggle').addEventListener('click', e => { setJump(!game.jump); e.currentTarget.blur(); });
+// Trait chips are rebuilt only when the selection changes, so hovering them is stable.
+$('i-traits').addEventListener('pointerover', e => {
+  const chip = e.target.closest('[data-trait]');
+  if (chip) showTraitTip(chip.dataset.trait, e.clientX, e.clientY);
+});
+$('i-traits').addEventListener('pointerout', e => { if (e.target.closest('[data-trait]')) hideTraitTip(); });
+$('i-name').addEventListener('click', startRename);
+$('i-rename').addEventListener('keydown', e => {
+  if (e.key === 'Enter') finishRename(true);
+  else if (e.key === 'Escape') finishRename(false);
+});
+$('i-rename').addEventListener('blur', () => finishRename(true));
 
 function updateCamera(realDt) {
   const pan = 420 / cam.zoom * realDt;
-  if (keys.has('arrowleft') || keys.has('a')) { cam.x -= pan; cam.follow = false; }
-  if (keys.has('arrowright') || keys.has('d')) { cam.x += pan; cam.follow = false; }
-  if (keys.has('arrowup') || keys.has('w')) { cam.y -= pan; cam.follow = false; }
-  if (keys.has('arrowdown') || keys.has('s')) { cam.y += pan; cam.follow = false; }
+  if (keys.has('arrowleft') || keys.has('a')) { cam.x -= pan; cam.follow = false; cam.target = null; }
+  if (keys.has('arrowright') || keys.has('d')) { cam.x += pan; cam.follow = false; cam.target = null; }
+  if (keys.has('arrowup') || keys.has('w')) { cam.y -= pan; cam.follow = false; cam.target = null; }
+  if (keys.has('arrowdown') || keys.has('s')) { cam.y += pan; cam.follow = false; cam.target = null; }
+  if (cam.target) { // gliding over to an alert
+    cam.x = lerp(cam.x, cam.target.x, Math.min(1, realDt * 4));
+    cam.y = lerp(cam.y, cam.target.y, Math.min(1, realDt * 4));
+    if (dist(cam.x, cam.y, cam.target.x, cam.target.y) < 2) cam.target = null;
+  }
   const th = cam.follow && world.thrimps.find(t => t.id === game.selected);
   if (th) {
     const home = th.hidden && world.byId.get(th.home);

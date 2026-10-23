@@ -40,3 +40,10 @@ function remember(th, world, text) {
   if (th.recent.length > 8) th.recent.pop();
 }
 function emote(th, world, icon, mins = 20) { th.emote = { icon, until: world.time + mins }; }
+// Something the player would want to see (a fight, a breakdown...). The UI shows it and may slow time and pan over
+// (ui.js); the simulation never waits for it. Not saved.
+function raiseAlert(w, text, x, y, who = []) {
+  if (!w.alerts) w.alerts = [];
+  w.alerts.push({ text, x, y, who, time: w.time });
+  if (w.alerts.length > 10) w.alerts.shift();
+}

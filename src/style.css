@@ -61,6 +61,24 @@
   #i-recent li { color: var(--dim); }
   #i-recent li b { color: var(--text); font-weight: normal; }
   #inspector .actions { margin-top: 10px; display: flex; gap: 6px; }
+  #inspector .name { cursor: text; }
+  #inspector .name:hover { text-decoration: underline dotted; }
+  #i-rename { font: inherit; font-size: 15px; font-weight: bold; color: var(--accent); background: #262b44;
+    border: 1px solid var(--accent); border-radius: 3px; width: 170px; padding: 1px 4px; }
+  #thing { top: 56px; right: 10px; width: 250px; display: none; }
+  #thing .head { display: flex; justify-content: space-between; align-items: center; }
+  #thing .name { color: var(--accent); font-weight: bold; font-size: 16px; }
+  #t-body .row { margin-top: 6px; }
+  #t-body .lbl { color: var(--dim); }
+  #t-body .who { cursor: pointer; color: var(--text); }
+  #t-body .who:hover { text-decoration: underline; }
+  #t-body .bad { color: var(--bad); }
+  #t-body .good { color: var(--good); }
+  #toast { top: 12px; left: 50%; transform: translateX(-50%); color: var(--text); border-color: var(--bad);
+    font-weight: bold; pointer-events: none; }
+  #tooltip { pointer-events: none; max-width: 260px; font-size: 12px; z-index: 5; }
+  #tooltip b { color: var(--accent); }
+  #tooltip ul { margin: 4px 0 0; padding-left: 16px; }
   #help { bottom: 10px; left: 10px; color: var(--dim); font-size: 12px; max-width: calc(100vw - 40px); }
   @media (max-width: 640px) {
     #inspector { top: auto; bottom: 10px; right: 10px; left: 10px; width: auto; }
