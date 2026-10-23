@@ -15,7 +15,7 @@ const ASSETS = path.join(ROOT, 'assets');
 const OUT = path.join(ROOT, 'public');
 
 // Concatenation order matters: a file's top-level code may use values from files above it.
-const SCRIPTS = ['config', 'helpers', 'names', 'world', 'paths', 'thrimp', 'mind', 'social', 'ai',
+const SCRIPTS = ['config', 'helpers', 'names', 'world', 'paths', 'trails', 'thrimp', 'mind', 'social', 'construction', 'ai',
   'sprites', 'ground', 'render', 'ui', 'input', 'main'];
 
 // Never allowed in the shipped game: ways of building or hiding code at runtime.

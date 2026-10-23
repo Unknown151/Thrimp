@@ -238,6 +238,79 @@ test('the inspector lists relationships, and clicking one selects that Thrimp', 
   expect(errors).toEqual([]);
 });
 
+test('trails: worlds start with some, walking wears more in, and unused ones grow back', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, worn = () => w.trail.filter(v => v > 0.3).length;
+    const atStart = worn();
+    const corner = trailCell(w, 6, 12); // nobody walks the map's corner
+    addWear(w, corner, 1);
+    thrimp.run(DAY);
+    const afterDay = worn();
+    thrimp.run(4 * DAY);
+    return { atStart, afterDay, cornerLeft: w.trail[corner] };
+  });
+  expect(r.atStart).toBeGreaterThan(100);
+  expect(r.afterDay).toBeGreaterThan(r.atStart);
+  expect(r.cornerLeft).toBeLessThan(0.1);
+  expect(errors).toEqual([]);
+});
+
+test('a worn path is cheaper to walk than fresh grass', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, g = w.graph;
+    const a = g.nodes.find(n => n.main && n.edges.length), e = a.edges[0], b = g.nodes[e.to];
+    const fresh = walkCost(w, a.x, a.y, b.x, b.y);
+    for (let k = 0; k <= 20; k++) stampTrail(w, lerp(a.x, b.x, k / 20), lerp(a.y, b.y, k / 20), 1);
+    updateTrailCosts(w);
+    return { len: e.len, fresh, worn: walkCost(w, a.x, a.y, b.x, b.y), edge: e.cost };
+  });
+  expect(r.worn).toBeLessThan(r.fresh * 0.7);
+  expect(r.edge).toBeLessThan(r.len * 0.7);
+});
+
+test('the homeless pair builds a home through all three stages and moves in', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    const homeless = w.thrimps.filter(t => !t.home).map(t => t.id);
+    const stages = new Set();
+    for (let m = 0; m < 4 * DAY && !(w.stats.huts_built > 0); m += 10) {
+      thrimp.run(10);
+      for (const s of w.sites) stages.add(siteStage(s));
+    }
+    const homes = homeless.map(id => byId(w, id).home);
+    return {
+      homeless: homeless.length, built: w.stats.huts_built || 0, stages: [...stages].sort().join(','),
+      sameNewHome: homes[0] && homes.every(h => h === homes[0]) && w.byId.get(homes[0]).type === 'hut',
+      proud: homeless.every(id => byId(w, id).thoughts.some(t => t.id === 'built_home')),
+    };
+  });
+  expect(r.homeless).toBe(2);
+  expect(r.built).toBe(1);
+  expect(r.stages).toBe('0,1,2');
+  expect(r.sameNewHome).toBe(true);
+  expect(r.proud).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('a building site next to a rival scores worse than one next to a friend', async ({ page }) => {
+  await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, [owner, other] = w.thrimps.filter(t => t.home);
+    const home = w.byId.get(other.home);
+    const spot = { x: home.x + 70, y: home.y };
+    other.opinions = other.opinions || {};
+    owner.opinions[other.id] = -90;
+    const nearRival = siteScore(w, spot, [owner]);
+    owner.opinions[other.id] = 90;
+    const nearFriend = siteScore(w, spot, [owner]);
+    return { nearRival, nearFriend };
+  });
+  expect(r.nearRival).toBeLessThan(r.nearFriend - 1);
+});
+
 test('routes never cross water, buildings or trees', async ({ page }) => {
   await open(page);
   const bad = await page.evaluate(() => {

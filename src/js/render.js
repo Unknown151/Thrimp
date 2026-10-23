@@ -79,6 +79,14 @@ function drawWoodpile(b) {
   }
   blit(block || sprites.block, b.x + 26, b.y + 2);
 }
+// A hut going up: the stage art for how far along it is, with the delivered logs stacked beside it.
+function drawSite(s) {
+  const stage = art(SITE_STAGES[siteStage(s)]);
+  if (stage) blit(stage, s.p.x, s.p.y);
+  else { ctx.fillStyle = P.dirt[1]; ctx.fillRect(s.p.x - s.p.w / 2, s.p.y - s.p.h, s.p.w, s.p.h); }
+  const unused = Math.max(0, Math.round(s.woodIn - woodNeededFor(s.work)));
+  for (let i = 0; i < Math.min(6, unused); i++) blit(sprites.log, s.p.x + s.p.w / 2 + 6, s.p.y - i * 3);
+}
 function emoteFor(th) {
   if (th.emote) return th.emote.icon;
   if (th.breaking) return '!';
@@ -98,6 +106,8 @@ function render(alpha) {
   const tx = Math.round(canvas.width / 2 - cam.x * z), ty = Math.round(canvas.height / 2 - cam.y * z);
   ctx.setTransform(z, 0, 0, z, tx, ty);
   ctx.drawImage(world.ground, 0, 0);
+  paintTrails(world);
+  ctx.drawImage(world.trailCanvas, 0, 0);
 
   const hw = viewW / 2 / cam.zoom, hh = viewH / 2 / cam.zoom;
   const vx0 = cam.x - hw - 48, vx1 = cam.x + hw + 48, vy0 = cam.y - hh - 16, vy1 = cam.y + hh + 64;
@@ -135,6 +145,10 @@ function render(alpha) {
       const s = art(b.art) || sprites[b.type];
       list.push({ y: b.y, draw: () => blit(s, b.x, b.y) });
     }
+  }
+  for (const s of world.sites) {
+    if (!inView(s.p.x, s.p.y)) continue;
+    list.push({ y: s.p.y, draw: () => drawSite(s) });
   }
   for (const t of world.tables) {
     if (!inView(t.x, t.y)) continue;

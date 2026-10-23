@@ -6,7 +6,7 @@ function goTo(x, y, label) {
   return {
     label,
     start(th, w) { const r = findRoute(w, th.x, th.y, x, y); if (!r) return 'fail'; th.route = r; },
-    update(th) { return followRoute(th); },
+    update(th, w) { return followRoute(th, w); },
     end(th) { th.route = null; th.moving = false; },
   };
 }
@@ -27,7 +27,7 @@ function act(mins, label, o = {}) {
 }
 const job = (title, steps, extra = {}) => ({ title, steps, i: 0, started: false, ...extra });
 
-function followRoute(th) {
+function followRoute(th, w) {
   const r = th.route;
   if (!r || !r.length) { th.moving = false; return true; }
   let budget = th.speed * CONFIG.MIN_PER_TICK;
@@ -41,6 +41,7 @@ function followRoute(th) {
     else { th.x += dx / d * budget; th.y += dy / d * budget; budget = 0; }
   }
   th.stepPhase += start - budget;
+  walkWear(th, w);
   th.moving = r.length > 0;
   return r.length === 0;
 }
@@ -261,6 +262,12 @@ const ACTIONS = [
     return r < 0.2 ? 1.15 - r : 0;
   } },
   { id: 'haul', make: makeHaulJob, score: th => th.carrying ? 0.85 : 0 },
+  { id: 'build', make: makeBuildJob, score(th, w) {
+    if (!w.sites.some(s => s.work < HUT_WORK)) return 0;
+    const own = w.sites.some(s => s.owners.includes(th.id));
+    if (!isWorkTime(th, hourOf(w.time))) return own ? 0.25 : 0; // owners put in evenings too
+    return (0.45 + (own ? 0.35 : 0)) * workDrive(th);
+  } },
   { id: 'repair', make: makeRepairJob, score(th, w) {
     if (!isWorkTime(th, hourOf(w.time)) || w.stock.wood < REPAIR_WOOD || !brokenThings(w).length) return 0;
     return 0.6 * workDrive(th);
@@ -369,5 +376,10 @@ function tick(w) {
   if (w.tick % 50 === 0) for (const tr of w.trees) if (tr.stump && w.time >= tr.regrowAt) { tr.stump = false; tr.wood = 3; }
   if (w.crate.broken && w.stock.food >= 1) w.stock.food = Math.max(0, w.stock.food - dt / 120); // spoiling in the open
   socialTick(w);
+  if (w.tick % Math.round(HOUR / dt) === 0) { // hourly upkeep
+    decayTrails(w);
+    updateTrailCosts(w);
+    planBuilding(w);
+  }
   for (const th of w.thrimps) updateThrimp(th, w, dt);
 }

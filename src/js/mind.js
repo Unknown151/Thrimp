@@ -49,6 +49,7 @@ const THOUGHTS = {
   made_to_work:   { label: 'Worked far too much', mood: -4, mins: 6 * HOUR },
   catharsis:      { label: 'Let it all out', mood: 12, mins: 36 * HOUR },
   inspired:       { label: 'Inspired!', mood: 8, mins: DAY },
+  built_home:     { label: 'Built my own home', mood: 10, mins: 2 * DAY },
   // Social (social.js)
   nice_chat:      { label: 'Had a nice chat', mood: 3, mins: 6 * HOUR },
   awkward_chat:   { label: 'Had a grating conversation', mood: -3, mins: 6 * HOUR },

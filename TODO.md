@@ -19,7 +19,9 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 - [x] 3. **Social:** spatial hash, encounters (nod, chat, compliment, insult, flirt, kiss, fight), opinions with
   chemistry, grudges, memories, witnesses, gossip, couples and break-ups, social need, lashing-out breaks, fight
   animation, relationships and memories in the inspector. Open: gossip distortion (design doc question)
-- [ ] 4. **Trails:** trail map, desire paths, self-chosen building sites
+- [x] 4. **Trails:** wear map with desire paths that grow back, trail-preferring routes, seeded trails in new worlds;
+  Thrimps choose building sites (work, friends, rivals, water) and raise huts in three visible stages from wood.
+  Later: other building types (storage, workshops) once there's a use for them
 - [ ] 5. **Narrator + chronicle:** tension director, first ~10 events, chronicle UI
 - [ ] 6. **Life cycle:** births, aging, death, marriages, family, inheritance of grudges
 - [ ] 7. **Resources & pressure:** depletion, invention, relocation and splitting
@@ -33,7 +35,7 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 ## Known issues
 
 - Thrimps can stand on exactly the same spot (they don't notice each other until step 3).
-- Food and wood pile up without limit (scarcity is step 7; wood only goes to repairs until step 4). With no
-  hardship, nobody breaks down: that comes once social conflict and events exist.
+- Food and wood pile up without limit (scarcity is step 7). Wood goes to repairs and huts, but chopping still
+  outpaces it. Breakdowns are rare without hardship: they need feuds, events or scarcity.
 - The design doc still says `thrimp.html` (now built as `public/index.html`), and its PixelLab MCP snippet uses
   `"transport"` where Claude Code expects `"type"`.

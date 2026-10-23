@@ -26,8 +26,8 @@ function buildGraph(world) {
       if (b.i <= a.i) return;
       const d = dist(a.x, a.y, b.x, b.y);
       if (d > maxLen || !segmentClear(world, a.x, a.y, b.x, b.y)) return;
-      a.edges.push({ to: b.i, cost: d });
-      b.edges.push({ to: a.i, cost: d });
+      a.edges.push({ to: b.i, len: d, cost: d }); // cost drops below len as a trail wears in (trails.js)
+      b.edges.push({ to: a.i, len: d, cost: d });
     });
   }
   // Only the network connected to the canteen counts; islands are ignored.
@@ -67,7 +67,8 @@ function astar(g, s, t) {
   if (s === t) return [s];
   const N = g.nodes.length, T = g.nodes[t];
   const gs = new Float64Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
-  const h = i => dist(g.nodes[i].x, g.nodes[i].y, T.x, T.y);
+  // Scaled by the best possible trail discount so the estimate never overshoots (keeps A* exact).
+  const h = i => dist(g.nodes[i].x, g.nodes[i].y, T.x, T.y) * (1 - TRAIL_DISCOUNT);
   const open = new MinHeap();
   gs[s] = 0; open.push(s, h(s));
   while (open.size) {
@@ -85,22 +86,29 @@ function astar(g, s, t) {
   for (let c = t; c !== s;) { c = from[c]; path.push(c); }
   return path.reverse();
 }
-// Skip waypoints wherever a straight walk is clear, so routes look chosen rather than gridded.
+// Skip waypoints where a straight walk is clear and no dearer than going round, so routes look chosen rather
+// than gridded, but a Thrimp still keeps to a worn path instead of cutting across the grass beside it.
 function smoothRoute(world, pts) {
   const out = [pts[0]];
   let i = 0;
   while (i < pts.length - 1) {
     let j = Math.min(pts.length - 1, i + 6);
-    while (j > i + 1 && !segmentClear(world, pts[i].x, pts[i].y, pts[j].x, pts[j].y)) j--;
+    while (j > i + 1 && !shortcutWorthIt(world, pts, i, j)) j--;
     out.push(pts[j]);
     i = j;
   }
   return out;
 }
+function shortcutWorthIt(world, pts, i, j) {
+  if (!segmentClear(world, pts[i].x, pts[i].y, pts[j].x, pts[j].y)) return false;
+  let around = 0;
+  for (let k = i; k < j; k++) around += walkCost(world, pts[k].x, pts[k].y, pts[k + 1].x, pts[k + 1].y);
+  return walkCost(world, pts[i].x, pts[i].y, pts[j].x, pts[j].y) <= around * 1.03;
+}
 function findRoute(world, x0, y0, x1, y1) {
   const d = dist(x0, y0, x1, y1);
   if (d < 1) return [];
-  if (d < 220 && segmentClear(world, x0, y0, x1, y1)) return [{ x: x1, y: y1 }];
+  if (d < 100 && segmentClear(world, x0, y0, x1, y1)) return [{ x: x1, y: y1 }]; // short hops go straight
   let a = nearestVisibleNode(world, x0, y0);
   if (a < 0) { const near = nearbyMainNodes(world, x0, y0, 400); if (!near.length) return null; a = near[0].i; }
   const b = nearestVisibleNode(world, x1, y1);

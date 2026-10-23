@@ -7,11 +7,11 @@ function isBlocked(world, x, y) {
   if (world.solid[Math.floor(y / CONFIG.CELL) * world.gw + Math.floor(x / CONFIG.CELL)]) return true;
   return sampleField(world.waterF, x, y) > world.waterT - 0.004; // keep feet off the waterline
 }
-function markSolid(world, x0, y0, x1, y1) {
+function markSolid(world, x0, y0, x1, y1, value = 1) {
   const C = CONFIG.CELL;
   for (let cy = Math.floor(y0 / C); cy <= Math.floor(y1 / C); cy++)
     for (let cx = Math.floor(x0 / C); cx <= Math.floor(x1 / C); cx++)
-      if (cx >= 0 && cy >= 0 && cx < world.gw && cy < world.gh) world.solid[cy * world.gw + cx] = 1;
+      if (cx >= 0 && cy >= 0 && cx < world.gw && cy < world.gh) world.solid[cy * world.gw + cx] = value;
 }
 // The start point is skipped so a Thrimp standing on an awkward spot can always walk away from it.
 function segmentClear(world, x0, y0, x1, y1) {
@@ -28,7 +28,9 @@ function dirtValue(world, x, y) {
   return v;
 }
 
-function placeBuilding(world, type, x, y, side = 12, front = 18) {
+// Placing a building is three steps, so a construction site can claim its ground long before the hut exists:
+// checkPlacement (is there room?), claimGround (block it off), addBuilding (the finished building).
+function checkPlacement(world, type, x, y, side = 12, front = 18) {
   const T = BUILDING_TYPES[type];
   x = Math.round(x); y = Math.round(y);
   const looks = (T.art || []).filter(name => objectArt[name]);
@@ -40,13 +42,30 @@ function placeBuilding(world, type, x, y, side = 12, front = 18) {
   for (let yy = rect.y0; yy <= rect.y1; yy += 4)
     for (let xx = rect.x0; xx <= rect.x1; xx += 4)
       if (isWater(world, xx, yy) || world.solid[Math.floor(yy / CONFIG.CELL) * world.gw + Math.floor(xx / CONFIG.CELL)]) return null;
-  const b = { id: world.nextId++, type, label: T.label, art: look, x, y, w, h, door: { x, y: y + 5 }, sleepers: [] };
-  world.noBuild.push(rect);
-  markSolid(world, x - w / 2, y - h, x + w / 2 - 1, y - 1);
+  return { type, x, y, w, h, look, rect };
+}
+function claimGround(world, p) {
+  world.noBuild.push(p.rect);
+  markSolid(world, p.x - p.w / 2, p.y - p.h, p.x + p.w / 2 - 1, p.y - 1);
+}
+function releaseGround(world, p) {
+  world.noBuild = world.noBuild.filter(r => r !== p.rect);
+  markSolid(world, p.x - p.w / 2, p.y - p.h, p.x + p.w / 2 - 1, p.y - 1, 0); // checkPlacement made sure nothing else was there
+}
+function addBuilding(world, p) {
+  const T = BUILDING_TYPES[p.type];
+  const b = { id: world.nextId++, type: p.type, label: T.label, art: p.look, x: p.x, y: p.y, w: p.w, h: p.h,
+    door: { x: p.x, y: p.y + 5 }, sleepers: [] };
   world.buildings.push(b);
   world.byId.set(b.id, b);
-  world.dirtSpots.push({ x, y: y + 7, rx: 10, ry: 6, building: b.id });
+  world.dirtSpots.push({ x: p.x, y: p.y + 7, rx: 10, ry: 6, building: b.id });
   return b;
+}
+function placeBuilding(world, type, x, y, side, front) {
+  const p = checkPlacement(world, type, x, y, side, front);
+  if (!p) return null;
+  claimGround(world, p);
+  return addBuilding(world, p);
 }
 
 function generateWorld() {
@@ -122,7 +141,9 @@ function tryGenerateWorld() {
   }
 
   // Huts scattered loosely around the canteen.
-  const nHuts = Math.ceil(CONFIG.START_THRIMPS / 2);
+  // One hut short on purpose: the last two Thrimps start out sleeping rough, and building them a home is the
+  // colony's first project. Couples forming later raise more.
+  const nHuts = Math.ceil(CONFIG.START_THRIMPS / 2) - 1;
   for (let k = 0; k < nHuts; k++) {
     for (let i = 0; i < 400; i++) {
       const ang = rand() * Math.PI * 2, r = randRange(100, 250);
@@ -212,5 +233,8 @@ function tryGenerateWorld() {
     const door = home ? home.door : canteen.door;
     world.thrimps.push(makeThrimp(world, door.x + randRange(-8, 8), door.y + randRange(2, 10), home ? home.id : 0));
   }
+  world.sites = [];
+  initTrails(world);
+  seedTrails(world);
   return world;
 }
