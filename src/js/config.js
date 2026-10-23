@@ -51,7 +51,7 @@ const OBJECT_ART = [
   'hut-a', 'hut-b', 'hut-c', 'canteen', 'table', 'table-broken', 'crate-full', 'crate-empty', 'crate-broken',
   'log', 'chopping-block',
   'oak-1', 'oak-2', 'oak-small', 'pine-1', 'pine-2', 'stump', 'bush-full', 'bush-bare',
-  'rocks', 'flowers', 'reeds', 'basket',
+  'rocks', 'flowers', 'reeds', 'basket', 'hut-stage-1', 'hut-stage-2', 'hut-stage-3',
 ];
 const TREE_ART = { oak: ['oak-1', 'oak-2', 'oak-small'], pine: ['pine-1', 'pine-2'] };
 

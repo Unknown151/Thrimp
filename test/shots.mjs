@@ -15,6 +15,19 @@ const shot = async (name, setup) => {
   await page.screenshot({ path: path.join(out, `${name}.png`) });
   console.log(`saved ${name}.png`);
 };
+await shot('building-site', () => {
+  thrimp.setSpeed(0);
+  for (let m = 0; m < 2 * DAY && !thrimp.world.sites.some(s => siteStage(s) >= 1); m += 10) thrimp.run(10);
+  const s = thrimp.world.sites[0] || thrimp.world.canteen;
+  const at = s.p || s;
+  cam.zoom = 3; cam.x = at.x; cam.y = at.y - 20;
+});
+await shot('trails-day3', () => {
+  thrimp.run(2 * DAY);
+  cam.zoom = 1.5; cam.x = thrimp.world.canteen.x; cam.y = thrimp.world.canteen.y;
+});
+await page.goto('http://localhost:8080/');
+await page.waitForFunction(() => window.thrimp && thrimp.world && thrimp.anims.walk);
 await shot('village-midday', () => { thrimp.setSpeed(0); thrimp.run(6 * 60); const c = thrimp.world.canteen; cam.zoom = 2; cam.x = c.x; cam.y = c.y + 10; });
 await shot('lumberyard', () => { const y = thrimp.world.lumberyard; cam.zoom = 3; cam.x = y.x; cam.y = y.y - 10; });
 await shot('overview', () => { cam.zoom = 1; cam.x = thrimp.world.canteen.x; cam.y = thrimp.world.canteen.y; });

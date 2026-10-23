@@ -76,12 +76,16 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | fight | a fight leaves both shaken with a grudge and -20 opinion; a bystander remembers who started it |
 | couples | mutual love (70+) and a flirt make partners; when one stops caring they split, the other heartbroken |
 | relationships list | the inspector lists relationships; clicking one selects that Thrimp |
+| trails | new worlds start with trails, a day of walking wears more in, an unused trail grows back within 5 days |
+| trail cost | a fully worn edge costs under 70% of fresh grass, in `walkCost` and in the graph |
+| building | the homeless pair raises one shared hut through all three stages within 4 days and moves in |
+| site choice | a spot next to a rival's home scores well below the same spot next to a friend's |
 | routes | 200 routes across the path network never cross water, buildings or trees |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
 | pacing | one game day simulates in under 1.5 s |
 
-**Pacing baseline:** one game day with 12 Thrimps takes about 50 ms in Edge on Rasmus's PC (2026-10-23, with the
-social layer; it was 21-25 ms before).
+**Pacing baseline:** one game day with 12 Thrimps takes about 55-60 ms in Edge on Rasmus's PC (2026-10-23, with
+social life, trails and building; it was 21-25 ms before those).
 
 ## Source map
 
@@ -94,9 +98,11 @@ social layer; it was 21-25 ms before).
 | `src/js/names.js` | Thrimp and place name generators |
 | `src/js/world.js` | Terrain fields, walk grid, building placement, world generation |
 | `src/js/paths.js` | Path network graph, A*, route smoothing, `findRoute` |
+| `src/js/trails.js` | Wear map, footfall wear and decay, trail-discounted walk costs, seeded trails, the trail overlay |
 | `src/js/thrimp.js` | Thrimp data, needs decay, schedules, recent-activity memory |
 | `src/js/mind.js` | `TRAITS`, `THOUGHTS` (moodlets), mood, mental breaks (`BREAKS`), inspirations, repairs |
 | `src/js/social.js` | Spatial hash, opinions, chemistry, grudges, memories, `SOCIAL` encounters, fights, couples, gossip |
+| `src/js/construction.js` | Who needs a home, site choice (`siteScore`), building sites in stages, build jobs, completion |
 | `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
 | `src/js/sprites.js` | Procedural sprites (buildings, trees, bushes, emotes) and PixelLab sheet loading |
 | `src/js/ground.js` | Paints the ground once into one big pixel canvas |
@@ -135,6 +141,16 @@ social layer; it was 21-25 ms before).
   friendship or rivalry. Negative opinions heal about 3 a week (not for the spiteful). Kisses and fights stop both
   Thrimps with a short `'social'` job; a fight gives both a 2-hour encounter cooldown. A step that starts a fight
   replaces its own job, so `runJob` checks `th.job !== j` after a step runs.
+- **Trails:** a Float32 wear map on a 4 px grid (data only). Each cell a Thrimp walks into gains 0.05 wear (half on
+  its four neighbours); every game hour all wear drops 0.012, so a full path grows back in about 3.5 days. Edge
+  costs are `len * (1 - 0.45 * wear)`, refreshed hourly; the A* estimate is scaled by the same 0.45 so it stays
+  exact; `smoothRoute` only cuts a corner if the shortcut's trail-discounted cost is no worse, so Thrimps keep to
+  paths. Only cells whose visual level (of 8) changes get repainted into the trail overlay.
+- **Building:** every world starts one hut short, so two homeless Thrimps raise the first new hut together.
+  `planBuilding` (hourly) starts sites for couples living apart and homeless singles (paired up), at most 2 at a time.
+  A site claims its ground at once (`checkPlacement` / `claimGround`), the path network is rebuilt, and the site is
+  abandoned if it would cut off any door. A hut takes 12 wood and 6 hours of work; work can't outrun delivered wood;
+  the stage art follows progress. The finished hut is added with `addBuilding`.
 - **Broken things** (`table.broken`, `crate.broken`) block seats or spoil food until a `repair` job spends 4 wood.
 - **Sprites** are anchored at the feet (`ax`, `ay`). Sheet frames share one baseline per direction (the lowest foot
   in any frame) so feet stay planted. Walk frames advance with distance walked, idle frames with game time.

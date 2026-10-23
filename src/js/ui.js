@@ -26,6 +26,10 @@ function updateUI() {
   const avg = world.thrimps.reduce((s, t) => s + t.mood, 0) / world.thrimps.length;
   const broken = world.thrimps.filter(t => t.breaking).length;
   $('hud-mood').textContent = `Colony mood ${signed(Math.round(avg))} (${moodLabel(avg).toLowerCase()})${broken ? ` · ${broken} breaking down` : ''}`;
+  $('hud-build').textContent = world.sites.map(s => {
+    const names = s.owners.map(id => byId(world, id)).filter(Boolean).map(t => t.name).join(' & ');
+    return `Building a hut for ${names}: stage ${siteStage(s) + 1}/3, ${Math.round(s.work / HUT_WORK * 100)}%`;
+  }).join('\n');
   document.querySelectorAll('#speed button').forEach(b => b.classList.toggle('on', +b.dataset.speed === game.speedIndex));
 
   const th = world.thrimps.find(t => t.id === game.selected);
