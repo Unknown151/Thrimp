@@ -92,14 +92,15 @@ function tryGenerateWorld() {
   world.canteen = canteen;
   const ty = canteen.y + 26;
   for (const tx of [canteen.x - 30, canteen.x + 30]) {
-    world.tables.push({ x: tx, y: ty });
+    const table = { x: tx, y: ty, broken: false };
+    world.tables.push(table);
     // The table is seen end-on with a bench either side; one more seat at the far end.
-    world.seats.push({ x: tx - 13, y: ty - 2, face: 'east', takenBy: 0 });
-    world.seats.push({ x: tx + 13, y: ty - 2, face: 'west', takenBy: 0 });
-    world.seats.push({ x: tx, y: ty - 14, face: 'south', takenBy: 0 });
+    world.seats.push({ x: tx - 13, y: ty - 2, face: 'east', takenBy: 0, table });
+    world.seats.push({ x: tx + 13, y: ty - 2, face: 'west', takenBy: 0, table });
+    world.seats.push({ x: tx, y: ty - 14, face: 'south', takenBy: 0, table });
   }
   world.dirtSpots.push({ x: canteen.x, y: ty, rx: 46, ry: 16 });
-  world.crate = { x: canteen.x + canteen.w / 2 + 14, y: canteen.y + 4 };
+  world.crate = { x: canteen.x + canteen.w / 2 + 14, y: canteen.y + 4, broken: false };
   world.store = { x: world.crate.x, y: world.crate.y + 7 };
 
   // Lumberyard out toward the thickest woods.

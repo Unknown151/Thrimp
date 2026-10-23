@@ -52,8 +52,9 @@ function deposit(world, th) {
   world.stock[th.carrying.kind === 'food' ? 'food' : 'wood'] += th.carrying.amount;
   th.carrying = null;
 }
+const freeSeats = world => world.seats.filter(s => !s.takenBy && !s.table.broken);
 function claimSeat(world, th) {
-  const free = world.seats.filter(s => !s.takenBy);
+  const free = freeSeats(world);
   if (!free.length) return null;
   const seat = pick(free);
   seat.takenBy = th.id;
@@ -88,8 +89,19 @@ function makeEatJob(th, w) {
     return job('Going for a meal', [
       goTo(spot.x, spot.y, 'Walking to the canteen'),
       act(randRange(20, 30), 'Eating at the canteen', {
-        begin: t => { if (w.stock.food < 1) return 'fail'; w.stock.food -= 1; t.dir = seat ? seat.face : 'north'; },
-        finish: t => eat(t, 0.65),
+        begin: t => {
+          if (w.stock.food < 1) return 'fail';
+          t.portions = hasTrait(t, 'greedy') && w.stock.food >= 2 ? 2 : 1;
+          w.stock.food -= t.portions;
+          t.dir = seat ? seat.face : 'north';
+        },
+        finish: t => {
+          eat(t, t.portions === 2 ? 0.9 : 0.65);
+          addThought(t, w, t.portions === 2 ? 'big_meal' : 'ate_meal');
+          if (!seat) addThought(t, w, 'ate_standing');
+          const company = w.seats.filter(s => s.takenBy && s.takenBy !== t.id).length;
+          if (hasTrait(t, 'shy') && company >= 3) addThought(t, w, 'crowded_table');
+        },
       }),
     ], { cleanup: t => releaseSeat(w, t) });
   }
@@ -100,7 +112,7 @@ function makeEatJob(th, w) {
     goTo(bush.ix, bush.iy, 'Walking to a berry bush'),
     act(15, 'Eating wild berries', {
       begin: t => { if (bush.berries < 1) return 'fail'; t.dir = 'north'; t.working = 'gather'; },
-      finish: t => { const n = Math.min(2, Math.floor(bush.berries)); bush.berries -= n; eat(t, 0.2 * n); },
+      finish: t => { const n = Math.min(2, Math.floor(bush.berries)); bush.berries -= n; eat(t, 0.2 * n); addThought(t, w, 'ate_raw'); },
       end: t => { t.working = false; },
     }),
   ], { cleanup: t => releaseIfMine(bush, t) });
@@ -119,14 +131,16 @@ function makeSleepJob(th, w) {
 function sleepStep(w, home) {
   return {
     label: home ? 'Sleeping at home' : 'Sleeping on the ground',
-    start(t) { t.asleep = true; if (home) { t.hidden = true; home.sleepers.push(t.id); } },
+    start(t) { t.asleep = true; t.sleptFor = 0; if (home) { t.hidden = true; home.sleepers.push(t.id); } },
     update(t, w2, dt) {
       t.needs.rest = Math.min(1, t.needs.rest + dt / 360);
-      if (t.needs.food < 0.15) return true;
+      t.sleptFor += dt;
+      if (t.needs.food < 0.15) { if (t.sleptFor > HOUR) addThought(t, w, 'woke_hungry'); return true; }
       return t.needs.rest >= 1 && !isSleepTime(t, hourOf(w.time));
     },
     end(t) {
       t.asleep = false;
+      if (t.sleptFor > 3 * HOUR) addThought(t, w, home ? 'slept_home' : 'slept_rough');
       if (home) {
         t.hidden = false;
         home.sleepers = home.sleepers.filter(id => id !== t.id);
@@ -149,8 +163,9 @@ function makeForageJob(th, w) {
       begin: t => { t.working = 'gather'; t.dir = 'north'; },
       each: (t, w2, dt) => {
         timer += dt;
-        while (timer >= 6 && bush.berries >= 1) {
-          timer -= 6;
+        const every = t.inspiration ? 4 : 6; // minutes per berry
+        while (timer >= every && bush.berries >= 1) {
+          timer -= every;
           bush.berries -= 1;
           if (!t.carrying) t.carrying = { kind: 'food', amount: 0 };
           t.carrying.amount++;
@@ -162,7 +177,7 @@ function makeForageJob(th, w) {
       end: t => { t.working = false; releaseIfMine(bush, t); },
     }),
     goTo(w.store.x + randRange(-5, 5), w.store.y + randRange(-1, 3), 'Carrying berries to the canteen'),
-    act(3, 'Storing berries', { finish: t => deposit(w, t) }),
+    act(3, 'Storing berries', { finish: t => { deposit(w, t); afterWork(t, w); } }),
   ], { cleanup: t => releaseIfMine(bush, t) });
 }
 
@@ -179,7 +194,7 @@ function makeChopJob(th, w) {
   tree.reservedBy = th.id;
   return job('Chopping wood', [
     goTo(tree.ix, tree.iy, 'Walking to a tree'),
-    act(45, 'Chopping a tree', {
+    act(th.inspiration ? 28 : 45, 'Chopping a tree', {
       begin: t => { if (tree.stump) return 'fail'; t.working = 'chop'; t.dir = tree.ix < tree.x ? 'east' : 'west'; },
       finish: t => {
         tree.wood--;
@@ -189,7 +204,7 @@ function makeChopJob(th, w) {
       end: t => { t.working = false; releaseIfMine(tree, t); },
     }),
     goTo(yard.drop.x + randRange(-8, 8), yard.drop.y + randRange(-1, 3), 'Hauling logs to the lumberyard'),
-    act(3, 'Stacking logs', { finish: t => deposit(w, t) }),
+    act(3, 'Stacking logs', { finish: t => { deposit(w, t); afterWork(t, w); } }),
   ], { cleanup: t => releaseIfMine(tree, t) });
 }
 
@@ -207,7 +222,7 @@ function makeHaulJob(th, w) {
 function makeRelaxJob(th, w) {
   const options = [];
   if (w.shoreSpots.length) options.push({ weight: 2, where: 'by the water', spot: pick(w.shoreSpots) });
-  if (w.seats.some(s => !s.takenBy)) options.push({ weight: 1.5, where: 'at the canteen', seat: true });
+  if (freeSeats(w).length) options.push({ weight: hasTrait(th, 'shy') ? 0.4 : 1.5, where: 'at the canteen', seat: true });
   const n = pick(nearbyMainNodes(w, th.x, th.y, 260));
   if (n) options.push({ weight: 1, where: 'in the grass', spot: { x: n.x + randRange(-10, 10), y: n.y + randRange(-10, 10), face: pick(DIRS) } });
   const o = weightedPick(options, o => o.weight);
@@ -218,12 +233,13 @@ function makeRelaxJob(th, w) {
     act(randRange(30, 70), `Relaxing ${o.where}`, {
       begin: t => { t.dir = spot.face || t.dir; },
       each: (t, w2, dt) => { t.needs.fun = Math.min(1, t.needs.fun + dt / 60); if (t.needs.fun >= 1) return 'done'; },
+      finish: t => addThought(t, w, o.seat ? 'relaxed_canteen' : o.where === 'by the water' ? 'relaxed_water' : 'relaxed_grass'),
     }),
   ], { cleanup: t => releaseSeat(w, t) });
 }
 
 function makeWanderJob(th, w) {
-  const n = pick(nearbyMainNodes(w, th.x, th.y, 160));
+  const n = pick(nearbyMainNodes(w, th.x, th.y, hasTrait(th, 'curious') ? 340 : 160));
   if (!n) return null;
   return job('Wandering', [
     goTo(n.x + randRange(-12, 12), n.y + randRange(-12, 12), 'Wandering about'),
@@ -245,22 +261,27 @@ const ACTIONS = [
     return r < 0.2 ? 1.15 - r : 0;
   } },
   { id: 'haul', make: makeHaulJob, score: th => th.carrying ? 0.85 : 0 },
+  { id: 'repair', make: makeRepairJob, score(th, w) {
+    if (!isWorkTime(th, hourOf(w.time)) || w.stock.wood < REPAIR_WOOD || !brokenThings(w).length) return 0;
+    return 0.6 * workDrive(th);
+  } },
   { id: 'forage', make: makeForageJob, score(th, w) {
     if (!isWorkTime(th, hourOf(w.time))) return 0;
     const need = clamp(1 - w.stock.food / (w.thrimps.length * 4), 0, 1);
-    return (0.32 + 0.5 * need) * th.likes.forage;
+    return (0.32 + 0.5 * need) * th.likes.forage * workDrive(th);
   } },
   { id: 'chop', make: makeChopJob, score(th, w) {
     if (!isWorkTime(th, hourOf(w.time))) return 0;
-    const need = clamp(1 - w.stock.wood / 40, 0, 1); // wood has no use yet, so keep the stockpile modest
-    return (0.18 + 0.35 * need) * th.likes.chop;
+    const need = clamp(1 - w.stock.wood / 40, 0, 1); // wood only goes to repairs so far: keep the stockpile modest
+    return (0.18 + 0.35 * need) * th.likes.chop * workDrive(th);
   } },
   { id: 'relax', make: makeRelaxJob, score(th, w) {
-    const s = (1 - th.needs.fun) * 0.75;
+    const s = (1 - th.needs.fun) * 0.75 * traitMult(th, 'relax');
     return isWorkTime(th, hourOf(w.time)) ? s * 0.7 : s + 0.3;
   } },
-  { id: 'wander', make: makeWanderJob, score: () => 0.12 },
+  { id: 'wander', make: makeWanderJob, score: th => 0.12 * traitMult(th, 'wander') },
 ];
+const workDrive = th => traitMult(th, 'work') * (th.inspiration ? 1.4 : 1);
 
 function chooseJob(th, w) {
   const scored = [];
@@ -322,6 +343,8 @@ function checkInterrupts(th, w) {
 
 function updateThrimp(th, w, dt) {
   updateNeeds(th, dt);
+  if (w.time >= th.nextMind) { th.nextMind = w.time + MIND_EVERY; refreshMind(th, w); }
+  else th.mood = moodOf(th, w); // cheap, and keeps mood exact when a thought runs out between refreshes
   if (th.emote && th.emote.until < w.time) th.emote = null;
   if (th.job) checkInterrupts(th, w);
   if (!th.job) {
@@ -338,5 +361,6 @@ function tick(w) {
   w.tick++;
   for (const b of w.bushes) if (b.berries < b.max) b.berries = Math.min(b.max, b.berries + dt / 240);
   if (w.tick % 50 === 0) for (const tr of w.trees) if (tr.stump && w.time >= tr.regrowAt) { tr.stump = false; tr.wood = 3; }
+  if (w.crate.broken && w.stock.food >= 1) w.stock.food = Math.max(0, w.stock.food - dt / 120); // spoiling in the open
   for (const th of w.thrimps) updateThrimp(th, w, dt);
 }

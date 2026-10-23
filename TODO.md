@@ -14,7 +14,8 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 ## Build order
 
 - [x] 1. **Sandbox:** canvas, one place, Thrimps wandering with needs and a canteen / home / work loop
-- [ ] 2. **Inner life:** traits, moodlets, inspector mood breakdown
+- [x] 2. **Inner life:** traits, moodlets, mental breaks (binge, wander off, sulk, smash), inspirations (work frenzy),
+  repairs with wood, inspector mood breakdown. Social traits (spiteful, violent, cunning) only bite from step 3
 - [ ] 3. **Social:** spatial hash, encounters, opinions, emote icons
 - [ ] 4. **Trails:** trail map, desire paths, self-chosen building sites
 - [ ] 5. **Narrator + chronicle:** tension director, first ~10 events, chronicle UI
@@ -30,6 +31,7 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 ## Known issues
 
 - Thrimps can stand on exactly the same spot (they don't notice each other until step 3).
-- Food and wood pile up without limit (scarcity is step 7; nothing uses wood until step 4).
+- Food and wood pile up without limit (scarcity is step 7; wood only goes to repairs until step 4). With no
+  hardship, nobody breaks down: that comes once social conflict and events exist.
 - The design doc still says `thrimp.html` (now built as `public/index.html`), and its PixelLab MCP snippet uses
   `"transport"` where Claude Code expects `"type"`.

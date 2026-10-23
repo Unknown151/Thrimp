@@ -48,7 +48,8 @@ const THRIMP_SHEETS = {
 // PixelLab object art, one PNG each in assets/objects/. The world is generated after these load, because
 // building footprints come from the art. Anything missing falls back to the procedural placeholder.
 const OBJECT_ART = [
-  'hut-a', 'hut-b', 'hut-c', 'canteen', 'table', 'crate-full', 'crate-empty', 'log', 'chopping-block',
+  'hut-a', 'hut-b', 'hut-c', 'canteen', 'table', 'table-broken', 'crate-full', 'crate-empty', 'crate-broken',
+  'log', 'chopping-block',
   'oak-1', 'oak-2', 'oak-small', 'pine-1', 'pine-2', 'stump', 'bush-full', 'bush-bare',
   'rocks', 'flowers', 'reeds', 'basket',
 ];

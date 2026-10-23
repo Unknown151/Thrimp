@@ -81,6 +81,8 @@ function drawWoodpile(b) {
 }
 function emoteFor(th) {
   if (th.emote) return th.emote.icon;
+  if (th.breaking) return '!';
+  if (th.mood <= -20 && !th.asleep) return 'tear';
   if (th.needs.food < 0.12) return 'hungry';
   if (th.needs.rest < 0.1 && !th.asleep) return 'z';
   if (th.asleep && !th.hidden) return 'z';
@@ -134,11 +136,14 @@ function render(alpha) {
       list.push({ y: b.y, draw: () => blit(s, b.x, b.y) });
     }
   }
-  const tableArt = art('table') || sprites.table;
-  for (const t of world.tables) if (inView(t.x, t.y)) list.push({ y: t.y, draw: () => blit(tableArt, t.x, t.y) });
+  for (const t of world.tables) {
+    if (!inView(t.x, t.y)) continue;
+    const s = (t.broken && art('table-broken')) || art('table') || sprites.table;
+    list.push({ y: t.y, draw: () => blit(s, t.x, t.y) });
+  }
   if (inView(world.crate.x, world.crate.y)) {
     list.push({ y: world.crate.y, draw: () => {
-      const look = art(world.stock.food >= 1 ? 'crate-full' : 'crate-empty');
+      const look = art(world.crate.broken ? 'crate-broken' : world.stock.food >= 1 ? 'crate-full' : 'crate-empty');
       if (look) { blit(look, world.crate.x, world.crate.y); return; }
       const s = sprites.crate, ox = world.crate.x - s.ax, oy = world.crate.y - s.ay;
       blit(s, world.crate.x, world.crate.y);

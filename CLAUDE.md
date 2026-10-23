@@ -27,7 +27,7 @@ Keep this file current: update it in the same change as anything it describes.
 
 ## Git workflow
 
-- `main` is what deploys (once Cloudflare Workers Builds is connected; see TODO).
+- `main` is what deploys: Cloudflare Workers Builds builds and deploys every push to it.
 - Work on a branch and open a PR that Rasmus merges. In the cloud, reuse one long-lived `claude/...` branch and restart
   it from the latest `main` after each merge. On the desktop, pull `main` first: cloud PRs may have landed.
 - Commit and push only when tests pass, and on the desktop only when Rasmus asks.
@@ -68,6 +68,10 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | sprite sheets load | idle, walk and gather in all 8 directions; chop east and west |
 | object art | every `OBJECT_ART` file loads, and every building and tree uses its art |
 | three days | everyone eats and sleeps, nobody starves, nobody is stuck "walking" in place, work gets done |
+| traits and mood | 2-3 traits each, never an opposite pair; mood equals traits plus live thoughts |
+| breakdown | a Thrimp held at -80 mood breaks down, then gets the "Let it all out" relief thought |
+| smash and repair | a forced smashing break wrecks a table or the crate, and someone repairs it with wood |
+| inspector mind | the inspector shows the mood label, every trait and every live thought |
 | routes | 200 routes across the path network never cross water, buildings or trees |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
 | pacing | one game day simulates in under 1.5 s |
@@ -86,6 +90,7 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | `src/js/world.js` | Terrain fields, walk grid, building placement, world generation |
 | `src/js/paths.js` | Path network graph, A*, route smoothing, `findRoute` |
 | `src/js/thrimp.js` | Thrimp data, needs decay, schedules, recent-activity memory |
+| `src/js/mind.js` | `TRAITS`, `THOUGHTS` (moodlets), mood, mental breaks (`BREAKS`), inspirations, repairs |
 | `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
 | `src/js/sprites.js` | Procedural sprites (buildings, trees, bushes, emotes) and PixelLab sheet loading |
 | `src/js/ground.js` | Paints the ground once into one big pixel canvas |
@@ -113,6 +118,12 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
   `end`. `finishJob` runs the current step's `end` and the job's `cleanup`, which releases reservations (bushes,
   trees, seats). Forgetting a release leaves a bush reserved forever. Needs interrupt work every 10 game minutes.
   Jobs hold closures, so they are not saved: on load, clear jobs and let Thrimps re-decide.
+- **Mind:** mood = trait base mood + every live thought (`moodOf`), recomputed every tick. `refreshMind` runs every
+  10 game minutes: drops expired thoughts, re-adds condition thoughts (hungry, homeless, a smashed table…: thoughts
+  without `mins`), then checks breaks and inspiration. The same thought again refreshes its timer rather than stacking.
+  A break is a job of type `'break'` whose cleanup ends the break and adds the catharsis thought. In a comfortable
+  colony nobody breaks: average mood sits around +5. Breaks need hardship (coming with steps 3, 5 and 7).
+- **Broken things** (`table.broken`, `crate.broken`) block seats or spoil food until a `repair` job spends 4 wood.
 - **Sprites** are anchored at the feet (`ax`, `ay`). Sheet frames share one baseline per direction (the lowest foot
   in any frame) so feet stay planted. Walk frames advance with distance walked, idle frames with game time.
 - **State is plain data** (objects with ids, not class instances) so it can be saved later.
