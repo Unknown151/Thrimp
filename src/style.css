@@ -27,7 +27,7 @@
   button:hover { border-color: var(--dim); }
   button.on { background: var(--accent); color: #181425; border-color: var(--accent); }
   #inspector { top: 56px; right: 10px; width: 270px; display: none; max-height: calc(100vh - 80px); overflow-y: auto; }
-  #inspector .need:has(#i-mood) { grid-template-columns: 74px 1fr; }
+  #inspector .need:has(#i-mood) { grid-template-columns: 100px 1fr; }
   #inspector .state:empty { display: none; }
   #inspector .state { margin-top: 6px; padding: 3px 6px; border-radius: 4px; background: #3e2731; color: var(--bad); }
   #inspector .state.inspired { background: #265c42; color: var(--good); }
@@ -38,6 +38,16 @@
   #i-thoughts .pos { color: var(--good); }
   #i-thoughts .neg { color: var(--bad); }
   #i-thoughts .left { color: var(--dim); text-align: right; }
+  #i-rels, #i-memories { margin: 4px 0 0; padding: 0; list-style: none; }
+  #i-rels li { display: grid; grid-template-columns: 1fr auto 34px; gap: 6px; cursor: pointer; }
+  #i-rels li:hover .who { text-decoration: underline; }
+  #i-rels .kind { color: var(--dim); }
+  #i-rels .pos { color: var(--good); text-align: right; }
+  #i-rels .neg { color: var(--bad); text-align: right; }
+  #i-rels .partner .who { color: var(--accent); }
+  #i-memories li { color: var(--dim); }
+  #i-memories li b { color: var(--text); font-weight: normal; }
+  #i-rels:empty::after, #i-memories:empty::after { content: 'Nobody yet'; color: var(--dim); }
   #inspector .head { display: flex; justify-content: space-between; align-items: center; }
   #inspector .name { color: var(--accent); font-weight: bold; font-size: 16px; }
   #inspector .doing { margin-top: 8px; font-weight: bold; }

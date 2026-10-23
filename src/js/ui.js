@@ -37,7 +37,7 @@ function updateUI() {
   $('i-home').textContent = `${home ? 'Lives in ' + home.label : 'Homeless'} · up ${fmtClock(th.schedule.wake * HOUR)} · bed ${fmtClock(th.schedule.bed * HOUR)}`;
   $('i-doing').textContent = step ? step.label : 'Thinking about what to do';
   $('i-why').textContent = th.job ? th.job.title : '';
-  for (const k of ['food', 'rest', 'fun']) {
+  for (const k of ['food', 'rest', 'fun', 'social']) {
     const v = th.needs[k], el = $('i-' + k);
     el.style.width = Math.round(v * 100) + '%';
     el.style.background = barColor(v);
@@ -75,6 +75,29 @@ function updateUI() {
   $('i-carry').textContent = th.carrying ? `Carrying ${th.carrying.amount} ${th.carrying.kind === 'food' ? 'berries' : 'logs'}` : '';
   const likes = Object.entries(th.likes).filter(([, v]) => v > 1.1).map(([k]) => k === 'forage' ? 'foraging' : 'chopping wood');
   $('i-likes').textContent = likes.length ? `Enjoys ${likes.join(' and ')}` : '';
+  // Relationships: the partner first, then whoever they feel most strongly about either way.
+  const known = Object.keys(th.opinions).map(id => byId(world, +id)).filter(Boolean)
+    .sort((a, b) => (b.id === th.partner) - (a.id === th.partner) || Math.abs(opinionOf(th, b)) - Math.abs(opinionOf(th, a)))
+    .slice(0, 8);
+  $('i-rels').replaceChildren(...known.map(o => {
+    const li = document.createElement('li');
+    li.dataset.id = o.id;
+    if (th.partner === o.id) li.className = 'partner';
+    const who = document.createElement('span'), kind = document.createElement('span'), val = document.createElement('span');
+    const grudges = th.grudges[o.id] || 0;
+    who.className = 'who'; who.textContent = o.name;
+    kind.className = 'kind'; kind.textContent = relationLabel(th, o) + (grudges >= 3 ? ' · grudge' : '');
+    const v = Math.round(opinionOf(th, o));
+    val.className = v >= 0 ? 'pos' : 'neg'; val.textContent = signed(v);
+    li.append(who, kind, val);
+    return li;
+  }));
+  $('i-memories').replaceChildren(...th.memories.slice(0, 6).map(m => {
+    const li = document.createElement('li'), b = document.createElement('b');
+    b.textContent = m.text;
+    li.append(`Day ${dayOf(m.time)} `, b);
+    return li;
+  }));
   const ul = $('i-recent');
   ul.replaceChildren(...th.recent.map(r => {
     const li = document.createElement('li');

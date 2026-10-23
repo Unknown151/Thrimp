@@ -51,6 +51,11 @@ window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resize);
 document.querySelectorAll('#speed button').forEach(b => b.addEventListener('click', () => { setSpeed(+b.dataset.speed); b.blur(); }));
 $('i-close').addEventListener('click', () => select(0));
+// The list is rebuilt five times a second, so react on pointerdown (a click could straddle a rebuild).
+$('i-rels').addEventListener('pointerdown', e => {
+  const li = e.target.closest('li');
+  if (li) select(+li.dataset.id);
+});
 $('i-follow').addEventListener('click', e => { cam.follow = !cam.follow; updateUI(); e.currentTarget.blur(); });
 
 function updateCamera(realDt) {

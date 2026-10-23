@@ -72,11 +72,16 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | breakdown | a Thrimp held at -80 mood breaks down, then gets the "Let it all out" relief thought |
 | smash and repair | a forced smashing break wrecks a table or the crate, and someone repairs it with wood |
 | inspector mind | the inspector shows the mood label, every trait and every live thought |
+| social life | over three days Thrimps chat, most pairs meet, and some feelings grow strong either way |
+| fight | a fight leaves both shaken with a grudge and -20 opinion; a bystander remembers who started it |
+| couples | mutual love (70+) and a flirt make partners; when one stops caring they split, the other heartbroken |
+| relationships list | the inspector lists relationships; clicking one selects that Thrimp |
 | routes | 200 routes across the path network never cross water, buildings or trees |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
 | pacing | one game day simulates in under 1.5 s |
 
-**Pacing baseline:** one game day with 12 Thrimps takes about 21-25 ms in Edge on Rasmus's PC (2026-10-22).
+**Pacing baseline:** one game day with 12 Thrimps takes about 50 ms in Edge on Rasmus's PC (2026-10-23, with the
+social layer; it was 21-25 ms before).
 
 ## Source map
 
@@ -91,6 +96,7 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | `src/js/paths.js` | Path network graph, A*, route smoothing, `findRoute` |
 | `src/js/thrimp.js` | Thrimp data, needs decay, schedules, recent-activity memory |
 | `src/js/mind.js` | `TRAITS`, `THOUGHTS` (moodlets), mood, mental breaks (`BREAKS`), inspirations, repairs |
+| `src/js/social.js` | Spatial hash, opinions, chemistry, grudges, memories, `SOCIAL` encounters, fights, couples, gossip |
 | `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
 | `src/js/sprites.js` | Procedural sprites (buildings, trees, bushes, emotes) and PixelLab sheet loading |
 | `src/js/ground.js` | Paints the ground once into one big pixel canvas |
@@ -123,6 +129,12 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
   without `mins`), then checks breaks and inspiration. The same thought again refreshes its timer rather than stacking.
   A break is a job of type `'break'` whose cleanup ends the break and adds the catharsis thought. In a comfortable
   colony nobody breaks: average mood sits around +5. Breaks need hardship (coming with steps 3, 5 and 7).
+- **Social:** `socialTick` rebuilds the spatial hash every tick; each Thrimp looks around every 3 game minutes and has
+  at most one encounter per 20 minutes with someone within 22 px. Opinions start as a first impression (housemates
+  +20); **chemistry** (-1..1, fixed per pair from luck and clashing/shared traits) decides whether chats build
+  friendship or rivalry. Negative opinions heal about 3 a week (not for the spiteful). Kisses and fights stop both
+  Thrimps with a short `'social'` job; a fight gives both a 2-hour encounter cooldown. A step that starts a fight
+  replaces its own job, so `runJob` checks `th.job !== j` after a step runs.
 - **Broken things** (`table.broken`, `crate.broken`) block seats or spoil food until a `repair` job spends 4 wood.
 - **Sprites** are anchored at the feet (`ax`, `ay`). Sheet frames share one baseline per direction (the lowest foot
   in any frame) so feet stay planted. Walk frames advance with distance walked, idle frames with game time.

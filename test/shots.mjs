@@ -22,6 +22,13 @@ await shot('inspector', () => {
   const t = thrimp.world.thrimps.filter(t => !t.hidden).sort((a, b) => b.thoughts.length - a.thoughts.length)[0];
   thrimp.select(t.id); cam.zoom = 3; cam.x = t.x; cam.y = t.y - 10;
 });
+await shot('fight', () => {
+  const w = thrimp.world, [a, b, c] = w.thrimps.filter(t => !t.hidden && !t.asleep);
+  const spot = { x: w.canteen.door.x - 60, y: w.canteen.door.y + 50 };
+  [a, b, c].forEach((t, i) => { if (t.job) finishJob(t, w, true); t.x = t.px = spot.x + [0, 16, 8][i]; t.y = t.py = spot.y + [0, 0, 22][i]; });
+  buildSpatialHash(w); startFight(a, b, w); thrimp.run(3);
+  thrimp.select(c.id); cam.zoom = 4; cam.x = spot.x + 40; cam.y = spot.y;
+});
 await page.evaluate(() => thrimp.select(0));
 await shot('village-night', () => { thrimp.run(15 * 60 - 12.5 * 60 + 9 * 60); const c = thrimp.world.canteen; cam.zoom = 2; cam.x = c.x; cam.y = c.y + 10; });
 await browser.close();

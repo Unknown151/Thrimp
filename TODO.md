@@ -16,7 +16,9 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 - [x] 1. **Sandbox:** canvas, one place, Thrimps wandering with needs and a canteen / home / work loop
 - [x] 2. **Inner life:** traits, moodlets, mental breaks (binge, wander off, sulk, smash), inspirations (work frenzy),
   repairs with wood, inspector mood breakdown. Social traits (spiteful, violent, cunning) only bite from step 3
-- [ ] 3. **Social:** spatial hash, encounters, opinions, emote icons
+- [x] 3. **Social:** spatial hash, encounters (nod, chat, compliment, insult, flirt, kiss, fight), opinions with
+  chemistry, grudges, memories, witnesses, gossip, couples and break-ups, social need, lashing-out breaks, fight
+  animation, relationships and memories in the inspector. Open: gossip distortion (design doc question)
 - [ ] 4. **Trails:** trail map, desire paths, self-chosen building sites
 - [ ] 5. **Narrator + chronicle:** tension director, first ~10 events, chronicle UI
 - [ ] 6. **Life cycle:** births, aging, death, marriages, family, inheritance of grudges
