@@ -269,7 +269,9 @@ function separateThrimps(w) {
     }
   }
 }
-const arriving = th => th.moving && th.route && th.route.length > 0 && dist(th.x, th.y, th.route[0].x, th.route[0].y) < PERSONAL_SPACE + 4;
+// Points along a rounded corner (bend) come every few px and only need passing near, so they don't count.
+const arriving = th => th.moving && th.route && th.route.length > 0 && !th.route[0].bend
+  && dist(th.x, th.y, th.route[0].x, th.route[0].y) < PERSONAL_SPACE + 4;
 const movable = th => th.moving || !th.job;
 const stalled = th => th.moving && (walkProgress.get(th) || {}).ghost > 0;
 function trackProgress(th) {

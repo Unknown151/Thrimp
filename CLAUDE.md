@@ -88,7 +88,7 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | building | the homeless pair raises one shared hut through all three stages within 4 days and moves in |
 | site choice | a spot next to a rival's home scores well below the same spot next to a friend's |
 | save round trip | after two days, a colony through `serializeWorld`, gzip and `restoreWorld` matches exactly (trail wear to within its 1/255 steps) and plays on |
-| routes | 200 routes across the path network never cross water, buildings or trees |
+| routes | 200 routes across the path network never cross water, buildings or trees (curves included), and most bend |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
 | things panel | clicking a hut lists who lives there (a name selects them); a bush says when it can be picked |
 | trait tooltip | every trait has effects listed; hovering a chip shows them |
@@ -142,7 +142,9 @@ later that day, so compare against `main` on the same machine before blaming a c
   8 px walk grid.
 - **Movement:** a sparse graph of walkable points (about 56 px apart, kept only if connected to the canteen), A* over
   it, then waypoints are skipped wherever a straight walk is clear. `segmentClear` ignores the start point so a Thrimp
-  on an awkward spot can always walk off it.
+  on an awkward spot can always walk off it. `roundCorners` then swaps each corner for a short quadratic Bezier
+  (24 px along each leg, points about 8 px apart, marked `bend: true`) unless any piece of it, or the leg after it,
+  would clip something solid. Thrimps walk the curves, so the trails they wear in bend too.
 - **AI:** each option in `ACTIONS` scores itself; the winner builds a job, a list of steps with `start` / `update` /
   `end`. `finishJob` runs the current step's `end` and the job's `cleanup`, which releases reservations (bushes,
   trees, seats). Forgetting a release leaves a bush reserved forever. Needs interrupt work every 10 game minutes.
@@ -162,7 +164,11 @@ later that day, so compare against `main` on the same machine before blaming a c
   its four neighbours); every game hour all wear drops 0.012, so a full path grows back in about 3.5 days. Edge
   costs are `len * (1 - 0.45 * wear)`, refreshed hourly; the A* estimate is scaled by the same 0.45 so it stays
   exact; `smoothRoute` only cuts a corner if the shortcut's trail-discounted cost is no worse, so Thrimps keep to
-  paths. Only cells whose visual level (of 8) changes get repainted into the trail overlay.
+  paths. Drawing: each overlay pixel reads the wear smoothly between cell centres (never as 4 px squares), slightly
+  blurred (so one-off detours don't show as thin cracks), with a slow noise wobble (so straight walks meander) and a
+  little edge grain. Past a threshold it is dirt with a thin darker rim, and pale stones where wear is heaviest. The
+  noise has its own rng from `world.seed`, so painting never touches the sim's. When a cell's level (of 24) changes,
+  the 16 px chunks it can reach are repainted, at most 40 a frame (about 1.5 ms at 12x).
 - **Building:** every world starts one hut short, so two homeless Thrimps raise the first new hut together.
   `planBuilding` (hourly) starts sites for couples living apart and homeless singles (paired up), at most 2 at a time.
   A site claims its ground at once (`checkPlacement` / `claimGround`), the path network is rebuilt, and the site is
@@ -170,7 +176,7 @@ later that day, so compare against `main` on the same machine before blaming a c
   the stage art follows progress. The finished hut is added with `addBuilding`.
 - **Personal space:** after everyone moves, `separateThrimps` pushes apart any two visible Thrimps closer than 10 px,
   with a sideways shear so they slide round each other instead of stalling face to face. Walkers and idlers give way;
-  someone busy on the spot (eating, chopping) stays put. Skipped for a walker within 14 px of its next waypoint (so a
+  someone busy on the spot (eating, chopping) stays put. Skipped for a walker within 14 px of its next waypoint, bends aside (so a
   seat or crate inside someone's space can still be reached) and for 2 s when a walker hasn't gained on its waypoint
   for 1 s (wedged between idlers). Seats are 13+ px apart, so seated eaters don't push each other off their seats.
 - **Alerts:** the sim calls `raiseAlert(w, text, x, y, who)` for trouble (fight, break, smash, break-up) into
