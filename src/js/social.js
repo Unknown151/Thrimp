@@ -201,6 +201,7 @@ function startFight(a, b, w) {
   remember(b, w, `Got into a fight with ${a.name}`);
   witness(w, a, b, `Saw ${a.name} attack ${b.name}`, -8, 'saw_fight');
   w.stats.fight = (w.stats.fight || 0) + 1; // counted here: fights also start from insults and breaks
+  raiseAlert(w, `${a.name} attacked ${b.name}!`, (a.x + b.x) / 2, (a.y + b.y) / 2, [a.id, b.id]);
 }
 
 // Runs from refreshMind: grudges soften (not for the spiteful), and love that has soured ends.
@@ -218,6 +219,7 @@ function refreshRelations(th, w) {
       remember(th, w, `Broke up with ${p.name}`);
       remember(p, w, `${th.name} broke up with them`);
       addThought(p, w, 'heartbroken');
+      raiseAlert(w, `${th.name} left ${p.name}`, p.x, p.y, [p.id]);
     }
   }
 }
@@ -234,6 +236,57 @@ function socialTick(w) {
       onEncounter(a, b, w);
       break;
     }
+  }
+}
+
+// --- Personal space: Thrimps don't stand inside each other; walkers step around whoever is in the way ---
+const PERSONAL_SPACE = 10; // px
+const STALL_TICKS = 20; // a walker that hasn't gained on its next waypoint for 1 s (at 1x) squeezes past
+const walkProgress = new WeakMap(); // Thrimp -> { wp, best, stall, ghost }; not saved, it only matters for seconds
+function separateThrimps(w) {
+  for (const th of w.thrimps) trackProgress(th);
+  for (const a of w.thrimps) {
+    if (a.hidden) continue;
+    for (const b of neighbours(w, a, PERSONAL_SPACE)) {
+      if (b.id < a.id || b.hidden) continue; // each pair once
+      let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy);
+      if (d >= PERSONAL_SPACE) continue;
+      if (d < 0.01) { const ang = rand() * Math.PI * 2; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; }
+      // Someone about to reach a waypoint is let through: a waypoint (or a crate or seat at the end of a route)
+      // inside another Thrimp's space could otherwise never be reached, and the walker would freeze there.
+      // So is a walker wedged in a crowd (pushed back as far as it steps): better a brief overlap than a freeze.
+      if (arriving(a) || arriving(b) || stalled(a) || stalled(b)) continue;
+      const push = (PERSONAL_SPACE - d) * 0.5; // closing half the gap per tick reads as a gentle sidestep
+      // Walkers and idlers make room; someone busy on the spot (chopping, eating, sleeping rough) stays put.
+      const ma = movable(a), mb = movable(b);
+      const ka = ma === mb ? 0.5 : ma ? 1 : 0;
+      // Push apart plus a sideways shear (each to its own right). A plain push would hold a walker at a fixed
+      // distance from someone standing on its path (step forward, pushed back the same amount, forever) and
+      // shove head-on walkers back along their paths; the shear makes them slide round each other instead.
+      const sx = dx / d, sy = dy / d, ex = sx - sy * 1.2, ey = sy + sx * 1.2;
+      nudge(w, a, ex * push * ka, ey * push * ka, sx * push * ka, sy * push * ka);
+      nudge(w, b, -ex * push * (1 - ka), -ey * push * (1 - ka), -sx * push * (1 - ka), -sy * push * (1 - ka));
+    }
+  }
+}
+const arriving = th => th.moving && th.route && th.route.length > 0 && dist(th.x, th.y, th.route[0].x, th.route[0].y) < PERSONAL_SPACE + 4;
+const movable = th => th.moving || !th.job;
+const stalled = th => th.moving && (walkProgress.get(th) || {}).ghost > 0;
+function trackProgress(th) {
+  const wp = th.moving && th.route && th.route[0];
+  if (!wp) { walkProgress.delete(th); return; }
+  const d = dist(th.x, th.y, wp.x, wp.y), p = walkProgress.get(th);
+  if (!p || p.wp !== wp) walkProgress.set(th, { wp, best: d, stall: 0, ghost: 0 });
+  else if (p.ghost > 0) p.ghost--; // squeezing past for 2 s, then back to polite
+  else if (d < p.best - 0.5) { p.best = d; p.stall = 0; }
+  else if (++p.stall > STALL_TICKS) { p.ghost = 40; p.stall = 0; }
+}
+// Move by (dx, dy); if that way is blocked, by the plain push (fx, fy); else not at all.
+function nudge(w, th, dx, dy, fx, fy) {
+  if (!dx && !dy) return;
+  for (const [mx, my] of [[dx, dy], [fx, fy]]) {
+    const x = th.x + mx, y = th.y + my;
+    if (!isBlocked(w, x, y)) { th.x = x; th.y = y; return; }
   }
 }
 

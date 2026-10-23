@@ -18,6 +18,22 @@ const TRAITS = {
   'early-riser':  { label: 'Early riser', desc: 'Up at dawn, in bed early.', schedule: -1.5, opposite: 'night-owl' },
   'night-owl':    { label: 'Night owl', desc: 'Up late, slow to rise.', schedule: 1.2, opposite: 'early-riser' },
 };
+// What each trait actually does, for the inspector's tooltip. Keep in step with the code that reads the traits.
+const TRAIT_EFFECTS = {
+  'hard-working': ['Works about 35% more', 'Relaxes a little less', 'Feels good after a stint of work (+5)', 'Clashes with the lazy'],
+  lazy:           ['Works about 40% less', 'Lounges about 35% more', 'Often grumbles after working (-4)', 'Clashes with the hard-working'],
+  greedy:         ['Eats a double portion at the canteen (+3)', 'Frets when the stores run low (-5)', 'Likelier to binge eat when breaking down'],
+  curious:        ['Wanders about 2.5x as often, and twice as far', 'Chats more with people they barely know', 'Likelier to wander off when breaking down'],
+  shy:            ['Needs company less', 'Starts fewer conversations', 'Hates eating at a crowded table (-5)', 'Slinks off humiliated when insulted (-4)', 'Likelier to sulk when breaking down', 'Clashes with hotheads'],
+  hotheaded:      ['Breaks down sooner (at -24 instead of -32)', 'Insults people they merely dislike', 'Swings back when insulted by someone they hate', 'Picks fights more often', 'Likelier to smash things when breaking down', 'Rubs most people the wrong way'],
+  spiteful:       ['Every grudge counts double', 'Bad turns hurt their opinion 50% more', 'Never forgives: bad opinions don\'t fade', 'Insults more readily', 'Rubs most people the wrong way', 'Clashes with the cunning'],
+  violent:        ['Far likelier to start a fight, and to win it', 'Enjoys winning a fight (+3)', 'May lash out at someone when breaking down', 'Likelier to smash things when breaking down'],
+  cunning:        ['Flatters people freely', 'Their insults sting half as much', 'Clashes with the spiteful'],
+  cheerful:       ['Mood +8', 'Conversations go a little better', 'Clashes with the gloomy'],
+  gloomy:         ['Mood -8', 'Conversations go a little worse', 'Likelier to sulk when breaking down', 'Clashes with the cheerful'],
+  'early-riser':  ['Wakes and goes to bed about 1.5 hours earlier'],
+  'night-owl':    ['Wakes and goes to bed about 1.2 hours later'],
+};
 function pickTraits() {
   const out = [];
   const want = chance(0.4) ? 3 : 2;
@@ -159,6 +175,7 @@ function startBreak(th, w, type) {
     startJob(th, w, j, 'break');
     remember(th, w, `Snapped: ${BREAKS[k].label.toLowerCase()}`);
     emote(th, w, '!', 40);
+    raiseAlert(w, `${th.name} snapped: ${BREAKS[k].label.toLowerCase()}`, th.x, th.y, [th.id]);
     return true;
   }
   return false;
@@ -220,6 +237,7 @@ function makeSmashJob(th, w) {
         o.broken = true;
         if (target.kind === 'crate') w.stock.food -= Math.floor(w.stock.food * 0.4); // berries everywhere
         remember(t, w, target.kind === 'crate' ? 'Smashed the food crate, berries everywhere' : 'Smashed a canteen table');
+        raiseAlert(w, `${t.name} smashed ${target.kind === 'crate' ? 'the food crate' : 'a canteen table'}!`, o.x, o.y, [t.id]);
       },
       end: t => { t.working = false; },
     }),

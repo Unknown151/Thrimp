@@ -382,4 +382,5 @@ function tick(w) {
     planBuilding(w);
   }
   for (const th of w.thrimps) updateThrimp(th, w, dt);
+  separateThrimps(w);
 }

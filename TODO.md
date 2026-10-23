@@ -23,6 +23,9 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 - [x] 4. **Trails:** wear map with desire paths that grow back, trail-preferring routes, seeded trails in new worlds;
   Thrimps choose building sites (work, friends, rivals, water) and raise huts in three visible stages from wood.
   Later: other building types (storage, workshops) once there's a use for them
+- [x] Polish 1: click huts, sites, bushes and trees for an info panel; trouble (fights, breaks, smashing,
+  break-ups) shows a notice and, if "Jump there" is on, slows to 1x and pans over; trait tooltips; nameplates on
+  everyone coloured by mood; personal space (Thrimps step round each other); renaming Thrimps
 - [ ] 5. **Narrator + chronicle:** tension director, first ~10 events, chronicle UI
 - [ ] 6. **Life cycle:** births, aging, death, marriages, family, inheritance of grudges
 - [ ] 7. **Resources & pressure:** depletion, invention, relocation and splitting
@@ -35,7 +38,7 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 
 ## Known issues
 
-- Thrimps can stand on exactly the same spot (they don't notice each other until step 3).
+- A Thrimp wedged in a crowd squeezes through for 2 seconds rather than freezing, so brief overlaps still happen.
 - Food and wood pile up without limit (scarcity is step 7). Wood goes to repairs and huts, but chopping still
   outpaces it. Breakdowns are rare without hardship: they need feuds, events or scarcity.
 - The design doc still says `thrimp.html` (now built as `public/index.html`), and its PixelLab MCP snippet uses

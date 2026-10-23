@@ -5,7 +5,7 @@ const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d');
 let dpr = 1, viewW = 0, viewH = 0;
 const cam = { x: 0, y: 0, zoom: 2, follow: false };
-const game = { speedIndex: 1, lastSpeed: 1, debug: false, selected: 0, hovered: 0 };
+const game = { speedIndex: 1, lastSpeed: 1, debug: false, selected: 0, hovered: 0, thing: null, jump: true, lastJump: -Infinity };
 let world, sprites;
 
 function resize() {
@@ -248,19 +248,28 @@ function drawDebug() {
   }
 }
 
+// Mood as a colour: red at breaking point, yellow around neutral, green when happy.
+const MOOD_RED = hexRgb('#e43b44'), MOOD_YELLOW = hexRgb('#feae34'), MOOD_GREEN = hexRgb('#63c74d');
+function moodColor(m) {
+  const t = clamp((m + 32) / 57, 0, 1); // -32 (breaking) .. +25 (happy)
+  const [a, b, f] = t < 0.56 ? [MOOD_RED, MOOD_YELLOW, t / 0.56] : [MOOD_YELLOW, MOOD_GREEN, (t - 0.56) / 0.44];
+  return `rgb(${a.map((v, i) => Math.round(lerp(v, b[i], f))).join(',')})`;
+}
+// Every Thrimp out of doors wears a nameplate under its feet; the selected and hovered ones stand out.
 function drawLabels(alpha) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.font = 'bold 11px ui-monospace, Consolas, monospace';
   ctx.textAlign = 'center';
-  ctx.lineWidth = 3;
   ctx.strokeStyle = P.outline;
-  for (const id of new Set([game.selected, game.hovered])) {
-    const th = id && world.thrimps.find(t => t.id === id);
-    if (!th || th.hidden) continue;
-    const p = thrimpPos(th, alpha);
-    const sp = worldToScreen(p.x, p.y + 4);
-    ctx.fillStyle = id === game.selected ? P.light[1] : P.white;
+  for (const th of world.thrimps) {
+    if (th.hidden) continue;
+    const p = thrimpPos(th, alpha), sp = worldToScreen(p.x, p.y + 4);
+    if (sp.x < -60 || sp.x > viewW + 60 || sp.y < -20 || sp.y > viewH + 30) continue;
+    const focus = th.id === game.selected || th.id === game.hovered;
+    ctx.font = `bold ${focus ? 12 : 10}px ui-monospace, Consolas, monospace`;
+    ctx.lineWidth = focus ? 4 : 3;
+    ctx.fillStyle = moodColor(th.mood);
     ctx.strokeText(th.name, sp.x, sp.y + 10);
     ctx.fillText(th.name, sp.x, sp.y + 10);
+    if (focus) { ctx.fillStyle = P.white; ctx.fillRect(sp.x - ctx.measureText(th.name).width / 2, sp.y + 13, ctx.measureText(th.name).width, 1); }
   }
 }

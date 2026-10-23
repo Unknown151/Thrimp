@@ -7,7 +7,8 @@ async function open(page) {
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto('/');
   await page.waitForFunction(() => window.thrimp && window.thrimp.world);
-  await page.evaluate(() => window.thrimp.setSpeed(0));
+  // Paused, and alerts don't move the camera or the selection (tests that need them switch them back on).
+  await page.evaluate(() => { window.thrimp.setSpeed(0); game.jump = false; });
   return errors;
 }
 
@@ -381,6 +382,120 @@ test('clicking a Thrimp opens the inspector', async ({ page }) => {
   await expect(page.locator('#i-name')).toHaveText(target.name);
   await page.keyboard.press('Escape');
   await expect(page.locator('#inspector')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('clicking a hut shows who lives there; a bush says when it can be picked', async ({ page }) => {
+  const errors = await open(page);
+  const hut = await page.evaluate(() => {
+    const w = thrimp.world;
+    const b = w.buildings.find(b => b.type === 'hut' && w.thrimps.some(t => t.home === b.id));
+    cam.x = b.x; cam.y = b.y - 20;
+    return { id: b.id, label: b.label, residents: w.thrimps.filter(t => t.home === b.id).map(t => t.name) };
+  });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  const at = await page.evaluate(id => {
+    const b = thrimp.world.byId.get(id);
+    for (let dy = 8; dy < 40; dy += 4) { // a point on the hut that no Thrimp covers and nothing stands in front of
+      const t = thingAt(b.x, b.y - dy);
+      if (t && t.id === id && !thrimpAt(b.x, b.y - dy)) return worldToScreen(b.x, b.y - dy);
+    }
+    return null;
+  }, hut.id);
+  expect(at).not.toBeNull();
+  await page.mouse.click(at.x, at.y);
+  await expect(page.locator('#thing')).toBeVisible();
+  await expect(page.locator('#t-name')).toHaveText(hut.label);
+  for (const name of hut.residents) await expect(page.locator('#t-body')).toContainText(name);
+  await page.locator('#t-body .who').first().dispatchEvent('pointerdown'); // a name selects that Thrimp
+  await expect(page.locator('#i-name')).toHaveText(hut.residents[0]);
+
+  await page.evaluate(() => {
+    const b = thrimp.world.bushes[0];
+    b.berries = 0.5; // 1.5 berries short of pickable, at 4 hours a berry
+    selectThing({ kind: 'bush', id: b.id });
+  });
+  await expect(page.locator('#t-name')).toHaveText('Berry bush');
+  await expect(page.locator('#t-body')).toContainText('Ready to pick: in about 6h');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#thing')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('hovering a trait shows what it does', async ({ page }) => {
+  const errors = await open(page);
+  const missing = await page.evaluate(() => Object.keys(TRAITS).filter(t => !(TRAIT_EFFECTS[t] || []).length));
+  expect(missing).toEqual([]);
+  const first = await page.evaluate(() => { const t = thrimp.world.thrimps[0]; thrimp.select(t.id); return TRAIT_EFFECTS[t.traits[0]][0]; });
+  await page.locator('#i-traits [data-trait]').first().hover();
+  await expect(page.locator('#tooltip')).toBeVisible();
+  await expect(page.locator('#tooltip')).toContainText(first);
+  await page.mouse.move(5, 5);
+  await expect(page.locator('#tooltip')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('nameplates run from red when breaking to green when happy', async ({ page }) => {
+  await open(page);
+  const c = await page.evaluate(() => ({ low: moodColor(-60), mid: moodColor(0), high: moodColor(40) }));
+  expect(c.low).toBe('rgb(228,59,68)');   // Endesga red
+  expect(c.high).toBe('rgb(99,199,77)');  // Endesga green
+  expect(c.mid).not.toBe(c.low);
+  expect(c.mid).not.toBe(c.high);
+});
+
+test('Thrimps on one spot step apart', async ({ page }) => {
+  const errors = await open(page);
+  const closest = await page.evaluate(() => {
+    const w = thrimp.world;
+    thrimp.run(4 * HOUR);
+    const crowd = w.thrimps.filter(t => !t.hidden && !t.asleep).slice(0, 4);
+    const spot = { x: w.canteen.door.x, y: w.canteen.door.y + 36 };
+    for (const t of crowd) { if (t.job) finishJob(t, w, true); t.moving = false; t.x = t.px = spot.x; t.y = t.py = spot.y; }
+    for (let i = 0; i < 20; i++) { buildSpatialHash(w); separateThrimps(w); }
+    let min = Infinity;
+    for (const a of crowd) for (const b of crowd) if (a !== b) min = Math.min(min, dist(a.x, a.y, b.x, b.y));
+    return min;
+  });
+  expect(closest).toBeGreaterThan(8);
+  expect(errors).toEqual([]);
+});
+
+test('when trouble starts the game slows to 1x and looks', async ({ page }) => {
+  const errors = await open(page);
+  const a = await page.evaluate(() => {
+    const w = thrimp.world;
+    thrimp.run(4 * HOUR);
+    const [a, b] = w.thrimps.filter(t => !t.hidden && !t.asleep);
+    game.jump = true; game.lastJump = -Infinity;
+    setSpeed(3);
+    startFight(a, b, w);
+    return { id: a.id, name: a.name };
+  });
+  await expect(page.locator('#toast')).toContainText(`${a.name} attacked`);
+  const r = await page.evaluate(() => ({ speed: game.speedIndex, selected: game.selected }));
+  expect(r).toEqual({ speed: 1, selected: a.id });
+  expect(errors).toEqual([]);
+});
+
+test('a renamed Thrimp keeps the name, also after a save', async ({ page }) => {
+  const errors = await open(page);
+  const other = await page.evaluate(() => { thrimp.select(thrimp.world.thrimps[0].id); return thrimp.world.thrimps[1].name; });
+  await page.locator('#i-name').click();
+  await page.locator('#i-rename').fill('  Sir   Wobble ');
+  await page.locator('#i-rename').press('Enter');
+  await expect(page.locator('#i-name')).toHaveText('Sir Wobble');
+  await page.locator('#i-name').click();
+  await page.locator('#i-rename').fill(other); // names stay unique
+  await page.locator('#i-rename').press('Enter');
+  await expect(page.locator('#i-name')).toHaveText('Sir Wobble');
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, t = w.thrimps[0];
+    const back = restoreWorld(JSON.parse(JSON.stringify(serializeWorld(w))));
+    return { remembered: t.recent.some(m => m.text === 'Became known as Sir Wobble'), saved: back.thrimps[0].name,
+      taken: back.names.has('Sir Wobble') };
+  });
+  expect(r).toEqual({ remembered: true, saved: 'Sir Wobble', taken: true });
   expect(errors).toEqual([]);
 });
 

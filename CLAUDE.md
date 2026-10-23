@@ -90,10 +90,17 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | save round trip | after two days, a colony through `serializeWorld`, gzip and `restoreWorld` matches exactly (trail wear to within its 1/255 steps) and plays on |
 | routes | 200 routes across the path network never cross water, buildings or trees |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
+| things panel | clicking a hut lists who lives there (a name selects them); a bush says when it can be picked |
+| trait tooltip | every trait has effects listed; hovering a chip shows them |
+| nameplate colour | `moodColor` runs from Endesga red (breaking) through yellow to green (happy) |
+| personal space | four Thrimps put on one spot end up more than 8 px apart |
+| alerts | a fight shows a notice, drops 3x to 1x and selects the attacker (with "Jump there" on) |
+| renaming | a new name shows in the inspector, is trimmed, can't copy someone else's, and survives a save |
 | pacing | one game day simulates in under 1.5 s |
 
-**Pacing baseline:** one game day with 12 Thrimps takes about 55-60 ms in Edge on Rasmus's PC (2026-10-23, with
-social life, trails and building; it was 21-25 ms before those).
+**Pacing baseline:** one game day with 12 Thrimps takes about 55-60 ms in Edge on Rasmus's PC on a quiet day
+(2026-10-23, with social life, trails and building; it was 21-25 ms before those). The same build measured 130-150 ms
+later that day, so compare against `main` on the same machine before blaming a change. Personal space adds ~10 ms.
 
 ## Source map
 
@@ -107,16 +114,16 @@ social life, trails and building; it was 21-25 ms before those).
 | `src/js/world.js` | Terrain fields, walk grid, building placement, world generation |
 | `src/js/paths.js` | Path network graph, A*, route smoothing, `findRoute` |
 | `src/js/trails.js` | Wear map, footfall wear and decay, trail-discounted walk costs, seeded trails, the trail overlay |
-| `src/js/thrimp.js` | Thrimp data, needs decay, schedules, recent-activity memory |
-| `src/js/mind.js` | `TRAITS`, `THOUGHTS` (moodlets), mood, mental breaks (`BREAKS`), inspirations, repairs |
-| `src/js/social.js` | Spatial hash, opinions, chemistry, grudges, memories, `SOCIAL` encounters, fights, couples, gossip |
+| `src/js/thrimp.js` | Thrimp data, needs decay, schedules, recent-activity memory, `raiseAlert` |
+| `src/js/mind.js` | `TRAITS` (+ `TRAIT_EFFECTS` for the tooltip), `THOUGHTS` (moodlets), mood, mental breaks (`BREAKS`), inspirations, repairs |
+| `src/js/social.js` | Spatial hash, opinions, chemistry, grudges, memories, `SOCIAL` encounters, fights, couples, gossip, personal space |
 | `src/js/construction.js` | Who needs a home, site choice (`siteScore`), building sites in stages, build jobs, completion |
 | `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
 | `src/js/sprites.js` | Procedural sprites (buildings, trees, bushes, emotes) and PixelLab sheet loading |
 | `src/js/ground.js` | Paints the ground once into one big pixel canvas |
-| `src/js/render.js` | Canvas, camera, y-sorted drawing, night lighting, debug overlay, name labels |
-| `src/js/ui.js` | HUD and inspector |
-| `src/js/input.js` | Mouse, wheel, keyboard, camera movement and follow |
+| `src/js/render.js` | Canvas, camera, y-sorted drawing, night lighting, debug overlay, mood-coloured nameplates |
+| `src/js/ui.js` | HUD, inspector, things panel (huts, sites, bushes, trees), alert notices and the camera jump, trait tooltip, renaming |
+| `src/js/input.js` | Mouse, wheel, keyboard, camera movement, follow and the glide to an alert |
 | `src/js/save.js` | `serializeWorld` / `restoreWorld`, gzip, talking to the Worker, autosave, "New world" |
 | `src/js/main.js` | Fixed-step main loop, `init` (load the save or make a world), the `window.thrimp` console/test handle |
 | `worker/index.js` | The Cloudflare Worker for `/api/save`: Access token check, KV storage, conflict check |
@@ -161,6 +168,20 @@ social life, trails and building; it was 21-25 ms before those).
   A site claims its ground at once (`checkPlacement` / `claimGround`), the path network is rebuilt, and the site is
   abandoned if it would cut off any door. A hut takes 12 wood and 6 hours of work; work can't outrun delivered wood;
   the stage art follows progress. The finished hut is added with `addBuilding`.
+- **Personal space:** after everyone moves, `separateThrimps` pushes apart any two visible Thrimps closer than 10 px,
+  with a sideways shear so they slide round each other instead of stalling face to face. Walkers and idlers give way;
+  someone busy on the spot (eating, chopping) stays put. Skipped for a walker within 14 px of its next waypoint (so a
+  seat or crate inside someone's space can still be reached) and for 2 s when a walker hasn't gained on its waypoint
+  for 1 s (wedged between idlers). Seats are 13+ px apart, so seated eaters don't push each other off their seats.
+- **Alerts:** the sim calls `raiseAlert(w, text, x, y, who)` for trouble (fight, break, smash, break-up) into
+  `w.alerts` (not saved). Each frame `processAlerts` shows the latest as a notice; with "Jump there" on (remembered in
+  `localStorage`) it also drops to 1x, glides the camera there (`cam.target`) and selects `who[0]`, at most once per
+  20 s. Tests switch it off in `open()`.
+- **Things panel:** `thingAt` hit-tests drawn sprite boxes (front-most wins; a Thrimp under the pointer wins over
+  everything). `game.thing` is `{ kind, id }`, looked up fresh every UI update, so it follows a site into its hut
+  (`fromSite`). Huts remember `builtDay` and `builtBy`.
+- **Renaming:** click the name in the inspector. Names are trimmed, at most 20 characters and unique (`world.names`
+  is rebuilt from the Thrimps on load). The name is saved with the Thrimp, so no save version bump was needed.
 - **Broken things** (`table.broken`, `crate.broken`) block seats or spoil food until a `repair` job spends 4 wood.
 - **Sprites** are anchored at the feet (`ax`, `ay`). Sheet frames share one baseline per direction (the lowest foot
   in any frame) so feet stay planted. Walk frames advance with distance walked, idle frames with game time.

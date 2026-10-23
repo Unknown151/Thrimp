@@ -15,6 +15,7 @@ function frame(now) {
     steps++;
   }
   if (steps >= CONFIG.MAX_STEPS_PER_FRAME) acc = 0;
+  processAlerts(now);
   updateCamera(realDt);
   render(clamp(acc / stepLen, 0, 1));
   if (now - lastUi > 200) { updateUI(); lastUi = now; }
@@ -34,6 +35,7 @@ async function init() {
   }
   if (!world) world = generateWorld();
   startAutosave();
+  loadJumpSetting();
   sprites = buildSprites(P);
   for (const [name, src] of Object.entries(THRIMP_SHEETS)) loadThrimpSheet(name, src);
   world.ground = paintGround(world, P);
