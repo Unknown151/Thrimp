@@ -1,12 +1,23 @@
-// Cloudflare Workers config: serves the built game in ./public (no server code yet).
+// Cloudflare Workers config. The game is static files in ./public; worker/index.js only runs for /api/* (saves).
 // Cloudflare Access guards thrimp.rsvn.dk, so the only way in is through its login.
 {
   "name": "thrimp",
+  "main": "worker/index.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": false,   // no workers.dev URL: it would skip the login
   "preview_urls": false,  // same for preview URLs
   "routes": [{ "pattern": "thrimp.rsvn.dk", "custom_domain": true }],
   "assets": {
-    "directory": "./public"
-  }
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]   // everything else is served without running the Worker
+  },
+  // One save per signed-in email. KV namespace "Thrimp Saves" (dashboard: Storage & Databases > KV).
+  "kv_namespaces": [{ "binding": "SAVES", "id": "fb9117b9c93842cc825f9c911e0088d6" }],
+  // From Zero Trust > Access > Applications > thrimp. Not secret: they say which login tokens to accept.
+  "vars": {
+    "TEAM_DOMAIN": "https://seedfall-rsvn.cloudflareaccess.com",
+    "POLICY_AUD": "7f24edd8bbb55de173aa1db6b9341a8aa1cbf6f9597cb8fa2053adb37fe79a12"
+  },
+  "observability": { "enabled": true }
 }

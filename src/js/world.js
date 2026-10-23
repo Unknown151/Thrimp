@@ -49,7 +49,8 @@ function claimGround(world, p) {
   markSolid(world, p.x - p.w / 2, p.y - p.h, p.x + p.w / 2 - 1, p.y - 1);
 }
 function releaseGround(world, p) {
-  world.noBuild = world.noBuild.filter(r => r !== p.rect);
+  const same = (a, b) => a.x0 === b.x0 && a.x1 === b.x1 && a.y0 === b.y0 && a.y1 === b.y1; // by value: survives a save
+  world.noBuild = world.noBuild.filter(r => !same(r, p.rect));
   markSolid(world, p.x - p.w / 2, p.y - p.h, p.x + p.w / 2 - 1, p.y - 1, 0); // checkPlacement made sure nothing else was there
 }
 function addBuilding(world, p) {
@@ -66,6 +67,23 @@ function placeBuilding(world, type, x, y, side, front) {
   if (!p) return null;
   claimGround(world, p);
   return addBuilding(world, p);
+}
+
+// Terrain comes only from terrainSeed and the settlement centre, so a save just stores those two and rebuilds it.
+function buildTerrain(world) {
+  const trng = mulberry32(world.terrainSeed);
+  const fbmWater = makeNoise(trng), fbmForest = makeNoise(trng), fbmTint = makeNoise(trng);
+  const { x: cx, y: cy } = world.center;
+  const keepClear = (x, y) => Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * 230 ** 2));
+  const edge = (x, y) => clamp(1 - Math.min(x, MAP_W - x, y, MAP_H - y) / 240, 0, 1);
+  world.waterF = makeField((x, y) => fbmWater(x / 300, y / 300) - 0.55 * keepClear(x, y));
+  const sorted = Float32Array.from(world.waterF.data).sort();
+  world.waterT = sorted[Math.floor(sorted.length * 0.9)]; // ~10% of the map is water
+  world.forestF = makeField((x, y) => clamp(fbmForest(x / 200, y / 200) * 0.9 + edge(x, y) * 0.75 - 0.35 - 0.6 * keepClear(x, y), 0, 1));
+  world.tintF = makeField((x, y) => fbmTint(x / 90, y / 90));
+  world.gw = Math.ceil(MAP_W / CONFIG.CELL);
+  world.gh = Math.ceil(MAP_H / CONFIG.CELL);
+  world.solid = new Uint8Array(world.gw * world.gh);
 }
 
 function generateWorld() {
@@ -85,21 +103,10 @@ function tryGenerateWorld() {
     tables: [], seats: [], shoreSpots: [], noBuild: [], dirtSpots: [],
     names: new Set(), nextId: 1, stats: {},
   };
-  const fbmWater = makeNoise(), fbmForest = makeNoise(), fbmTint = makeNoise();
-  const cx = MAP_W * randRange(0.42, 0.58), cy = MAP_H * randRange(0.42, 0.58);
-  world.center = { x: cx, y: cy };
-  const keepClear = (x, y) => Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * 230 ** 2));
-  const edge = (x, y) => clamp(1 - Math.min(x, MAP_W - x, y, MAP_H - y) / 240, 0, 1);
-
-  world.waterF = makeField((x, y) => fbmWater(x / 300, y / 300) - 0.55 * keepClear(x, y));
-  const sorted = Float32Array.from(world.waterF.data).sort();
-  world.waterT = sorted[Math.floor(sorted.length * 0.9)]; // ~10% of the map is water
-  world.forestF = makeField((x, y) => clamp(fbmForest(x / 200, y / 200) * 0.9 + edge(x, y) * 0.75 - 0.35 - 0.6 * keepClear(x, y), 0, 1));
-  world.tintF = makeField((x, y) => fbmTint(x / 90, y / 90));
-
-  world.gw = Math.ceil(MAP_W / CONFIG.CELL);
-  world.gh = Math.ceil(MAP_H / CONFIG.CELL);
-  world.solid = new Uint8Array(world.gw * world.gh);
+  world.terrainSeed = Math.floor(rand() * 2 ** 32);
+  world.center = { x: MAP_W * randRange(0.42, 0.58), y: MAP_H * randRange(0.42, 0.58) };
+  const cx = world.center.x, cy = world.center.y;
+  buildTerrain(world);
 
   // Canteen at the heart of the settlement, with tables and a food store out front.
   let canteen = null;

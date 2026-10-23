@@ -44,7 +44,7 @@ function periodName(h) {
     : h < 18 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night';
 }
 
-function makeNoise() {
+function makeNoise(rand) { // takes its own rng, so terrain can be rebuilt from a saved seed
   const perm = new Uint8Array(256).map((_, i) => i);
   for (let i = 255; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
   const vals = Float32Array.from({ length: 256 }, () => rand());

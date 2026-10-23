@@ -24,7 +24,16 @@ function frame(now) {
 async function init() {
   resize();
   await loadObjectArt(); // building footprints and meadow props come from the art
-  world = generateWorld();
+  const saved = await fetchSave();
+  if (saved) {
+    try { world = restoreWorld(saved); } catch (e) { console.warn('Could not restore the save', e); }
+    if (!world) {
+      cloud.enabled = false; // keep the unreadable save safe until "New world" is chosen on purpose
+      cloud.note = 'Couldn\'t read the saved colony: this is a fresh one (not saved)';
+    }
+  }
+  if (!world) world = generateWorld();
+  startAutosave();
   sprites = buildSprites(P);
   for (const [name, src] of Object.entries(THRIMP_SHEETS)) loadThrimpSheet(name, src);
   world.ground = paintGround(world, P);

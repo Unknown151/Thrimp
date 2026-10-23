@@ -16,7 +16,7 @@ const OUT = path.join(ROOT, 'public');
 
 // Concatenation order matters: a file's top-level code may use values from files above it.
 const SCRIPTS = ['config', 'helpers', 'names', 'world', 'paths', 'trails', 'thrimp', 'mind', 'social', 'construction', 'ai',
-  'sprites', 'ground', 'render', 'ui', 'input', 'main'];
+  'sprites', 'ground', 'render', 'ui', 'input', 'save', 'main'];
 
 // Never allowed in the shipped game: ways of building or hiding code at runtime.
 const BANNED = [
@@ -105,6 +105,9 @@ function serve(port) {
   const types = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.webp': 'image/webp' };
   http.createServer((req, res) => {
     const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    // Saves live in the Cloudflare Worker (npx wrangler dev runs it locally). Here, say so politely:
+    // a 200 that isn't a save keeps saving off without a console error.
+    if (url.startsWith('/api/')) { res.writeHead(200, { 'Content-Type': 'text/plain' }).end('no save server here'); return; }
     let file = path.join(OUT, url.endsWith('/') ? url + 'index.html' : url);
     if (!file.startsWith(OUT + path.sep)) { res.writeHead(403).end(); return; }
     fs.readFile(file, (err, data) => {

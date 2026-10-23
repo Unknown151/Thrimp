@@ -8,7 +8,8 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 - [x] 2. Files: `.gitignore`, `package.json` + lockfile, `build.mjs` with safety checks, `test/`, `CLAUDE.md`
 - [ ] 3. Claude: install the Claude GitHub App on the repo, make a cloud environment with a setup script, start a session
 - [x] 4. Cloudflare: Workers Builds from GitHub, `thrimp.rsvn.dk`, Access login (2026-10-22)
-  - [ ] Later: KV namespace for saves, Anthropic key secret, `/api` Worker with an Access token check
+  - [x] KV namespace for saves and an `/api` Worker with an Access token check (cloud saves, 2026-10-23)
+  - [ ] Later: Anthropic key secret (Claude's voice, build step 9)
 - [ ] 5. Optional: protect `main` behind the Workers Builds check; a GitHub Action that runs the tests on PRs
 
 ## Build order
