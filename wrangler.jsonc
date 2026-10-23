@@ -12,8 +12,8 @@
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]   // everything else is served without running the Worker
   },
-  // One save per signed-in email. Created in the dashboard: Storage & Databases > KV.
-  "kv_namespaces": [{ "binding": "SAVES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }],
+  // One save per signed-in email. KV namespace "Thrimp Saves" (dashboard: Storage & Databases > KV).
+  "kv_namespaces": [{ "binding": "SAVES", "id": "fb9117b9c93842cc825f9c911e0088d6" }],
   // From Zero Trust > Access > Applications > thrimp. Not secret: they say which login tokens to accept.
   "vars": {
     "TEAM_DOMAIN": "https://seedfall-rsvn.cloudflareaccess.com",
