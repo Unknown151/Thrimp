@@ -143,6 +143,8 @@ const EMOTE_ICONS = {
   '!': ['..#..', '..#..', '..#..', '.....', '..#..'],
   z: ['#####', '...#.', '..#..', '.#...', '#####'],
   hungry: ['.....', '#...#', '#####', '.###.', '.....'],
+  note: ['..##.', '..#.#', '..#..', '###..', '##...'],
+  tear: ['..#..', '.###.', '#####', '#####', '.###.'],
 };
 function drawEmote(P, rows, color) {
   const c = makeCanvas(11, 11), g = c.getContext('2d');
@@ -174,6 +176,8 @@ function buildSprites(P) {
       '!': drawEmote(P, EMOTE_ICONS['!'], P.berry[0]),
       z: drawEmote(P, EMOTE_ICONS.z, P.water[1]),
       hungry: drawEmote(P, EMOTE_ICONS.hungry, P.dirt[1]),
+      note: drawEmote(P, EMOTE_ICONS.note, P.grass[2]),
+      tear: drawEmote(P, EMOTE_ICONS.tear, P.water[1]),
     },
     placeholder: { front: drawPlaceholderThrimp(P, false), back: drawPlaceholderThrimp(P, true) },
   };

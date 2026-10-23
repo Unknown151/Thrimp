@@ -89,6 +89,81 @@ test('over three days everyone eats and sleeps, and nobody gets stuck', async ({
   expect(errors).toEqual([]);
 });
 
+test('every Thrimp has 2-3 traits without a clashing pair, and mood adds up', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    thrimp.run(24 * 60);
+    return w.thrimps.map(t => ({
+      name: t.name, count: t.traits.length,
+      clash: t.traits.some(a => t.traits.includes(TRAITS[a].opposite)),
+      moodOff: Math.abs(t.mood - moodOf(t, w)) > 0.001,
+      thoughts: t.thoughts.length,
+    }));
+  });
+  expect(r.filter(t => t.count < 2 || t.count > 3)).toEqual([]);
+  expect(r.filter(t => t.clash)).toEqual([]);
+  expect(r.filter(t => t.moodOff)).toEqual([]);
+  expect(r.filter(t => t.thoughts > 0).length).toBeGreaterThan(6); // a day of living leaves thoughts behind
+  expect(errors).toEqual([]);
+});
+
+test('a Thrimp kept miserable breaks down, then feels relief', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, th = w.thrimps[0];
+    th.thoughts.push({ id: 'slept_rough', mood: -80, until: w.time + 3 * DAY }); // test-only misery
+    let broke = false, relief = false;
+    for (let m = 0; m < 2 * DAY && !relief; m += 10) {
+      thrimp.run(10);
+      if (th.breaking) broke = true;
+      if (th.thoughts.some(t => t.id === 'catharsis')) relief = true;
+    }
+    return { broke, relief, breaks: th.breaks };
+  });
+  expect(r.broke).toBe(true);
+  expect(r.relief).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('a smashing break wrecks something, and someone repairs it with wood', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    thrimp.run(3 * 60); // mid-morning, so repairs fall in working hours
+    w.stock.wood = 30;
+    const th = w.thrimps.find(t => !t.hidden && !t.asleep);
+    const started = startBreak(th, w, 'smash');
+    const isBroken = () => w.crate.broken || w.tables.some(t => t.broken);
+    let smashed = false, fixed = false;
+    for (let m = 0; m < 2 * DAY && !fixed; m += 10) {
+      thrimp.run(10);
+      if (isBroken()) smashed = true;
+      else if (smashed) fixed = true;
+    }
+    return { started, smashed, fixed, wood: w.stock.wood };
+  });
+  expect(r.started).toBe(true);
+  expect(r.smashed).toBe(true);
+  expect(r.fixed).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('the inspector shows mood, traits and thoughts', async ({ page }) => {
+  const errors = await open(page);
+  const th = await page.evaluate(() => {
+    thrimp.run(8 * 60);
+    const t = thrimp.world.thrimps.find(t => t.thoughts.some(x => x.until > thrimp.world.time));
+    thrimp.select(t.id);
+    return { traits: t.traits.length, thoughts: t.thoughts.filter(x => x.until > thrimp.world.time).length };
+  });
+  await expect(page.locator('#i-mood-label')).toHaveText(/^(Happy|Content|Fine|Stressed|On edge|Breaking) [+-]?\d+$/);
+  await expect(page.locator('#i-traits span')).toHaveCount(th.traits);
+  await expect(page.locator('#i-thoughts li')).toHaveCount(th.thoughts);
+  await expect(page.locator('#hud-mood')).toContainText('Colony mood');
+  expect(errors).toEqual([]);
+});
+
 test('routes never cross water, buildings or trees', async ({ page }) => {
   await open(page);
   const bad = await page.evaluate(() => {

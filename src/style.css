@@ -26,7 +26,18 @@
   }
   button:hover { border-color: var(--dim); }
   button.on { background: var(--accent); color: #181425; border-color: var(--accent); }
-  #inspector { top: 56px; right: 10px; width: 260px; display: none; }
+  #inspector { top: 56px; right: 10px; width: 270px; display: none; max-height: calc(100vh - 80px); overflow-y: auto; }
+  #inspector .need:has(#i-mood) { grid-template-columns: 74px 1fr; }
+  #inspector .state:empty { display: none; }
+  #inspector .state { margin-top: 6px; padding: 3px 6px; border-radius: 4px; background: #3e2731; color: var(--bad); }
+  #inspector .state.inspired { background: #265c42; color: var(--good); }
+  .traits { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .traits span { border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; font-size: 12px; cursor: help; }
+  #i-thoughts { margin: 4px 0 0; padding: 0; list-style: none; }
+  #i-thoughts li { display: grid; grid-template-columns: 1fr auto 34px; gap: 6px; }
+  #i-thoughts .pos { color: var(--good); }
+  #i-thoughts .neg { color: var(--bad); }
+  #i-thoughts .left { color: var(--dim); text-align: right; }
   #inspector .head { display: flex; justify-content: space-between; align-items: center; }
   #inspector .name { color: var(--accent); font-weight: bold; font-size: 16px; }
   #inspector .doing { margin-top: 8px; font-weight: bold; }

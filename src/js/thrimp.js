@@ -2,14 +2,17 @@
 // THRIMP: needs, schedule, memory of recent activity
 // ============================================================
 function makeThrimp(world, x, y, homeId) {
+  const traits = pickTraits();
+  const shift = traits.reduce((s, t) => s + (TRAITS[t].schedule || 0), 0); // early risers and night owls
   return {
     id: world.nextId++, name: makeName(world.names),
     x, y, px: x, py: y,
     dir: 'south', moving: false, working: false, hidden: false, asleep: false, stepPhase: 0,
     speed: CONFIG.WALK_SPEED * randRange(0.85, 1.15),
     needs: { food: randRange(0.6, 0.9), rest: randRange(0.7, 0.95), fun: randRange(0.4, 0.9) },
-    schedule: { wake: randRange(5, 7.5), bed: randRange(21, 23.5) },
+    schedule: { wake: clamp(randRange(5, 7.5) + shift, 4, 9.5), bed: clamp(randRange(21, 23.2) + shift, 19.5, 23.9) },
     likes: { forage: randRange(0.75, 1.25), chop: randRange(0.75, 1.25) },
+    traits, thoughts: [], mood: 0, lowFor: 0, highFor: 0, inspiration: null, breaking: null, breaks: 0, nextMind: 0,
     home: homeId,
     job: null, route: null, carrying: null,
     idleUntil: 0, nextCheck: 0, emote: null,
