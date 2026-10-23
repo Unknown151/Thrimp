@@ -116,5 +116,33 @@ function findRoute(world, x0, y0, x1, y1) {
   const path = astar(world.graph, a, b);
   if (!path) return null;
   const pts = [{ x: x0, y: y0 }, ...path.map(i => ({ x: world.graph.nodes[i].x, y: world.graph.nodes[i].y })), { x: x1, y: y1 }];
-  return smoothRoute(world, pts).slice(1);
+  return roundCorners(world, smoothRoute(world, pts)).slice(1);
+}
+// Turn each corner into a short curve (a quadratic Bezier with the corner as its control point), so Thrimps walk,
+// and wear in, bends rather than sharp angles. A curve that would clip something solid keeps its plain corner.
+const BEND_RADIUS = 24; // px along each leg where the curve starts and ends
+function roundCorners(world, pts) {
+  const out = [pts[0]];
+  for (let k = 1; k < pts.length - 1; k++) {
+    const a = out[out.length - 1], p = pts[k], b = pts[k + 1];
+    const la = dist(a.x, a.y, p.x, p.y), lb = dist(p.x, p.y, b.x, b.y);
+    const turn = Math.abs(Math.atan2((p.x - a.x) * (b.y - p.y) - (p.y - a.y) * (b.x - p.x), (p.x - a.x) * (b.x - p.x) + (p.y - a.y) * (b.y - p.y)));
+    const r = Math.min(BEND_RADIUS, la * 0.45, lb * 0.45);
+    if (turn < 0.2 || r < 4) { out.push(p); continue; } // nearly straight, or legs too short to bend
+    const s = { x: p.x + (a.x - p.x) / la * r, y: p.y + (a.y - p.y) / la * r };
+    const e = { x: p.x + (b.x - p.x) / lb * r, y: p.y + (b.y - p.y) / lb * r };
+    const steps = Math.max(2, Math.ceil(r * 2 / 8));
+    const curve = [s];
+    for (let t = 1; t <= steps; t++) {
+      const u = t / steps, v = 1 - u;
+      curve.push({ x: v * v * s.x + 2 * v * u * p.x + u * u * e.x, y: v * v * s.y + 2 * v * u * p.y + u * u * e.y, bend: true });
+    }
+    s.bend = true;
+    let clear = segmentClear(world, a.x, a.y, s.x, s.y);
+    for (let t = 1; clear && t < curve.length; t++) clear = segmentClear(world, curve[t - 1].x, curve[t - 1].y, curve[t].x, curve[t].y);
+    clear = clear && segmentClear(world, e.x, e.y, b.x, b.y); // part of a clear leg, but sampled differently
+    if (clear) out.push(...curve); else out.push(p);
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
 }

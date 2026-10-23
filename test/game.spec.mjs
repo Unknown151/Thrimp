@@ -343,23 +343,26 @@ test('a saved colony comes back identical and keeps living', async ({ page }) =>
   expect(errors).toEqual([]);
 });
 
-test('routes never cross water, buildings or trees', async ({ page }) => {
+test('routes never cross water, buildings or trees, and bend round corners', async ({ page }) => {
   await open(page);
-  const bad = await page.evaluate(() => {
+  const { bad, bent } = await page.evaluate(() => {
     const w = thrimp.world, nodes = w.graph.nodes.filter(n => n.main), out = [];
+    let bent = 0;
     for (let i = 0; i < 200; i++) {
       const a = nodes[(i * 7919) % nodes.length], b = nodes[(i * 104729 + 13) % nodes.length];
       const route = findRoute(w, a.x, a.y, b.x, b.y);
       if (!route) { out.push(`no route ${a.i} -> ${b.i}`); continue; }
+      if (route.some(p => p.bend)) bent++;
       let x = a.x, y = a.y;
       for (const p of route) {
         if (!segmentClear(w, x, y, p.x, p.y)) { out.push(`blocked leg on ${a.i} -> ${b.i}`); break; }
         x = p.x; y = p.y;
       }
     }
-    return out;
+    return { bad: out, bent };
   });
   expect(bad).toEqual([]);
+  expect(bent).toBeGreaterThan(50); // most longer routes turn somewhere
 });
 
 test('clicking a Thrimp opens the inspector', async ({ page }) => {

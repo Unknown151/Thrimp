@@ -6,19 +6,21 @@ function paintGround(world, P) {
   const img = g.createImageData(MAP_W, MAP_H), d = img.data;
   const grass = P.grass.map(hexRgb), dirt = P.dirt.map(hexRgb), water = P.water.map(hexRgb);
   const T = world.waterT;
+  // Colour edges are crisp, roughened by a little noise grain (no checkerboard dither, which read as fuzz).
+  const grainNoise = makeNoise(mulberry32(world.seed ^ 0x9a1d));
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
-      const b = bayer(x, y) - 0.5;
+      const b = grainNoise(x / 5, y / 5, 2) - 0.5;
       const wv = sampleField(world.waterF, x, y);
       let col;
       if (wv > T) {
-        const depth = (wv - T) / 0.06;
-        col = depth < 0.12 ? (b > 0.25 ? water[2] : water[1]) : depth + b * 0.35 > 1 ? water[0] : water[1];
-      } else if (wv > T - 0.014 + b * 0.006) {
+        const depth = (wv - T) / 0.06 + b * 0.1;
+        col = depth < 0.12 ? water[2] : depth > 1 ? water[0] : water[1];
+      } else if (wv > T - 0.014 + b * 0.004) {
         col = wv > T - 0.006 ? dirt[1] : dirt[2];
       } else {
-        const tint = sampleField(world.tintF, x, y) + b * 0.08;
-        const fo = sampleField(world.forestF, x, y) + b * 0.12;
+        const tint = sampleField(world.tintF, x, y) + b * 0.03;
+        const fo = sampleField(world.forestF, x, y) + b * 0.05;
         col = fo > 0.72 ? grass[0] : (fo > 0.45 || tint < 0.36) ? grass[1] : grass[2];
       }
       const i = (y * MAP_W + x) * 4;
@@ -29,9 +31,9 @@ function paintGround(world, P) {
   for (const s of world.dirtSpots) {
     for (let y = Math.floor(s.y - s.ry); y <= s.y + s.ry; y++) for (let x = Math.floor(s.x - s.rx); x <= s.x + s.rx; x++) {
       if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H || isWater(world, x, y)) continue;
-      const v = 1 - (((x - s.x) / s.rx) ** 2 + ((y - s.y) / s.ry) ** 2) + (bayer(x, y) - 0.5) * 0.5;
+      const v = 1 - (((x - s.x) / s.rx) ** 2 + ((y - s.y) / s.ry) ** 2) + (grainNoise(x / 5, y / 5, 2) - 0.5) * 0.4;
       if (v <= 0) continue;
-      const col = v > 0.7 && bayer(x + 1, y + 2) > 0.85 ? dirt[3] : dirt[2];
+      const col = v > 0.7 && ((Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) >>> 0) % 29 === 0 ? dirt[3] : dirt[2];
       const i = (y * MAP_W + x) * 4;
       d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2];
     }
