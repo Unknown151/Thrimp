@@ -138,7 +138,8 @@ later that day, so compare against `main` on the same machine before blaming a c
   minutes. Rendering interpolates between the last two positions (`px`, `py`). Real time per frame is capped at
   0.25 s, which is what stops catch-up after the tab was hidden.
 - **Terrain** is three smooth fields (water, forest, tint) sampled on a 4 px grid and read bilinearly. Water is
-  whatever is above the 90th percentile, so every map is about 10% water. Solids (buildings, tree trunks) live on an
+  whatever is above the 90th percentile, so every map is about 10% water. Where colours meet (grass shades, water
+  depths, shore) the edge is crisp, roughened by a little noise grain; Rasmus found checkerboard dithering too fuzzy. Solids (buildings, tree trunks) live on an
   8 px walk grid.
 - **Movement:** a sparse graph of walkable points (about 56 px apart, kept only if connected to the canteen), A* over
   it, then waypoints are skipped wherever a straight walk is clear. `segmentClear` ignores the start point so a Thrimp
