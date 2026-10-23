@@ -52,9 +52,16 @@ npm run dev                 # build, serve http://localhost:8080, rebuild on eve
 
 On Rasmus's PC, Node is at `C:\Program Files\nodejs` (`.claude/launch.json` uses that full path).
 Cloudflare: build command `node build.mjs`, deploy command `npx wrangler deploy`. `wrangler.jsonc` serves `./public`
-at `thrimp.rsvn.dk` only (`workers_dev` and `preview_urls` are off so nothing skips the login). Cloudflare Access guards
-the whole domain with an email policy and a one-time PIN. There's no Worker code yet; when one is added for `/api/*`,
-it must check the Access token (`Cf-Access-Jwt-Assertion`) itself, like Seedfall's does.
+at `thrimp.rsvn.dk` only (`workers_dev` and `preview_urls` are off so nothing skips the login; builds for preview
+branches are switched off in the dashboard). Cloudflare Access guards the whole domain with an email policy and a
+one-time PIN. `worker/index.js` runs only for `/api/*` (`run_worker_first`) and checks the Access token
+(`Cf-Access-Jwt-Assertion`) itself on every call: RS256 signature against the team's keys, `POLICY_AUD`, `TEAM_DOMAIN`
+issuer, expiry. Saves live in the KV namespace bound as `SAVES`, one key per signed-in email.
+
+Saving locally: `npm run dev` has no Worker, so saving stays off there (the dev server answers `/api/*` with a plain
+200 so nothing logs an error). To test saving, run `npx wrangler dev --port 8787 --ip 127.0.0.1` with a gitignored
+`.dev.vars` containing `DEV_EMAIL=you@localhost`: that stands in for the login, only for requests from this machine.
+`test/worker-check.mjs` then checks save, reload, the two-computers conflict and save size end to end.
 
 ## Tests
 
@@ -80,6 +87,7 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | trail cost | a fully worn edge costs under 70% of fresh grass, in `walkCost` and in the graph |
 | building | the homeless pair raises one shared hut through all three stages within 4 days and moves in |
 | site choice | a spot next to a rival's home scores well below the same spot next to a friend's |
+| save round trip | after two days, a colony through `serializeWorld`, gzip and `restoreWorld` matches exactly (trail wear to within its 1/255 steps) and plays on |
 | routes | 200 routes across the path network never cross water, buildings or trees |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
 | pacing | one game day simulates in under 1.5 s |
@@ -109,7 +117,9 @@ social life, trails and building; it was 21-25 ms before those).
 | `src/js/render.js` | Canvas, camera, y-sorted drawing, night lighting, debug overlay, name labels |
 | `src/js/ui.js` | HUD and inspector |
 | `src/js/input.js` | Mouse, wheel, keyboard, camera movement and follow |
-| `src/js/main.js` | Fixed-step main loop, `init`, the `window.thrimp` console/test handle |
+| `src/js/save.js` | `serializeWorld` / `restoreWorld`, gzip, talking to the Worker, autosave, "New world" |
+| `src/js/main.js` | Fixed-step main loop, `init` (load the save or make a world), the `window.thrimp` console/test handle |
+| `worker/index.js` | The Cloudflare Worker for `/api/save`: Access token check, KV storage, conflict check |
 | `assets/` | Shipped art: `thrimp/*.png` (idle, walk, gather, chop sheets), `objects/*.png`, `favicon.png` |
 | `art/` | Raw PixelLab downloads, `pixellab-objects.json` (object name -> id), previews (not shipped) |
 | `tools/` | `build-sheet.ps1` (frames -> palette-locked sheet), `fetch-frames.ps1`, `fetch-objects.ps1` |
@@ -154,7 +164,14 @@ social life, trails and building; it was 21-25 ms before those).
 - **Broken things** (`table.broken`, `crate.broken`) block seats or spoil food until a `repair` job spends 4 wood.
 - **Sprites** are anchored at the feet (`ax`, `ay`). Sheet frames share one baseline per direction (the lowest foot
   in any frame) so feet stay planted. Walk frames advance with distance walked, idle frames with game time.
-- **State is plain data** (objects with ids, not class instances) so it can be saved later.
+- **State is plain data** (objects with ids, not class instances) so it can be saved.
+- **Saving:** the terrain is rebuilt from `terrainSeed` + `center` (its own rng, separate from the sim's), so a save
+  holds only what changes: Thrimps, buildings, sites, trees, bushes, stock, the trail map (delta-coded, 1/255 steps)
+  and so on. Not saved: jobs, routes, reservations, the walk grid and the path network (rebuilt on load; Thrimps
+  re-decide). Anything new that must survive a reload has to go into `serializeWorld`/`restoreWorld`, and changing
+  their shape needs a `SAVE_VERSION` bump. Autosave every 2 minutes and when the tab is hidden, only if game time
+  moved; the Worker refuses (409) a save based on an older version than it holds, so two computers can't overwrite
+  each other: the stale one stops saving and says so. An unreadable save is left alone (saving off) until "New world".
 
 ## Art (PixelLab)
 

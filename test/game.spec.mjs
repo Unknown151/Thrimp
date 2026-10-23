@@ -311,6 +311,37 @@ test('a building site next to a rival scores worse than one next to a friend', a
   expect(r.nearRival).toBeLessThan(r.nearFriend - 1);
 });
 
+test('a saved colony comes back identical and keeps living', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(async () => {
+    const w = thrimp.world;
+    thrimp.run(2 * DAY); // long enough for opinions, memories, trails and the first new hut
+    const look = x => ({
+      place: x.placeName, time: x.time, stock: JSON.stringify(x.stock), huts: x.buildings.length, sites: x.sites.length,
+      trees: x.trees.map(t => `${t.x},${t.y},${t.stump}`).join(';'), waterT: x.waterT,
+      thrimps: x.thrimps.map(t => `${t.name}|${t.x.toFixed(2)}|${t.traits}|${JSON.stringify(t.opinions)}|${t.memories.length}|${t.partner}|${t.home}`).join(';'),
+    });
+    const before = look(w);
+    // Through gzip and back, as it travels to the Worker.
+    const data = JSON.parse(await gunzip(await gzip(JSON.stringify(serializeWorld(w)))));
+    const restored = restoreWorld(data);
+    const after = look(restored);
+    const diff = Object.keys(before).filter(k => before[k] !== after[k]);
+    // Trail wear is stored in 1/255 steps, so each cell may move by half a step (invisible), never more.
+    let worst = 0;
+    for (let i = 0; i < w.trail.length; i++) worst = Math.max(worst, Math.abs(w.trail[i] - restored.trail[i]));
+    if (worst > 0.5 / 255 + 1e-6) diff.push(`trail off by ${worst}`);
+    restored.ground = paintGround(restored, P); // as init does after loading a save
+    world = restored; // play on in the restored world
+    thrimp.run(DAY);
+    return { diff, ranOn: restored.time > w.time + DAY - 1 };
+  });
+  expect(r.diff).toEqual([]);
+  expect(r.ranOn).toBe(true);
+  await expect(page.locator('#new-world')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('routes never cross water, buildings or trees', async ({ page }) => {
   await open(page);
   const bad = await page.evaluate(() => {

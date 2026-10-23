@@ -51,6 +51,7 @@ window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', resize);
 document.querySelectorAll('#speed button').forEach(b => b.addEventListener('click', () => { setSpeed(+b.dataset.speed); b.blur(); }));
 $('i-close').addEventListener('click', () => select(0));
+$('new-world').addEventListener('click', e => { e.currentTarget.blur(); newWorld(); });
 // The list is rebuilt five times a second, so react on pointerdown (a click could straddle a rebuild).
 $('i-rels').addEventListener('pointerdown', e => {
   const li = e.target.closest('li');
