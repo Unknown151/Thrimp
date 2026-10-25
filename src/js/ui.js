@@ -17,6 +17,7 @@ function select(id) {
 // `at` is the world point that was clicked; the panel opens beside it (or beside the thing itself).
 function selectThing(t, at) {
   game.thing = t;
+  game.thingAwaySince = 0;
   if (t) {
     game.selected = 0; cam.follow = false;
     const obj = findThing(t), p = obj && (obj.p || obj);
@@ -249,6 +250,12 @@ function updateThingPanel() {
     return row;
   }));
   placeThingPanel();
+}
+// The panel closes once the pointer has been off both the thing and the panel for a moment (input.js starts the
+// clock); the grace lets the pointer cross the gap from the thing onto the panel to click a name.
+const THING_AWAY_MS = 400;
+function closeThingIfAway(now) {
+  if (game.thing && game.thingAwaySince && now - game.thingAwaySince > THING_AWAY_MS) selectThing(null);
 }
 // Every frame: keep the panel beside the clicked spot as the camera moves, flipping to the left near the right edge
 // and staying on screen.

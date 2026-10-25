@@ -11,7 +11,15 @@ canvas.addEventListener('pointermove', e => {
   const w = screenToWorld(e.clientX, e.clientY);
   const th = thrimpAt(w.x, w.y);
   game.hovered = th ? th.id : 0;
-  if (!drag) { canvas.style.cursor = th || thingAt(w.x, w.y) ? 'pointer' : ''; return; }
+  if (!drag) {
+    const t = thingAt(w.x, w.y);
+    canvas.style.cursor = th || t ? 'pointer' : '';
+    // Still over what the panel is about (or what its site became)? Then the panel stays; else start its close clock.
+    const own = t && game.thing && t.id === game.thing.id && t.kind === game.thing.kind;
+    if (own) game.thingAwaySince = 0;
+    else if (game.thing && !game.thingAwaySince) game.thingAwaySince = performance.now();
+    return;
+  }
   const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
   if (!drag.moved && Math.hypot(dx, dy) > 4) { drag.moved = true; cam.follow = false; cam.target = null; canvas.classList.add('dragging'); }
   if (drag.moved) { cam.x = drag.cx - dx / cam.zoom; cam.y = drag.cy - dy / cam.zoom; }
@@ -27,7 +35,13 @@ canvas.addEventListener('pointerup', e => {
   drag = null;
   canvas.classList.remove('dragging');
 });
-canvas.addEventListener('pointerleave', () => { game.hovered = 0; });
+canvas.addEventListener('pointerleave', () => {
+  game.hovered = 0;
+  if (game.thing && !game.thingAwaySince) game.thingAwaySince = performance.now();
+});
+// Over the panel itself counts as staying (canvas pointerleave fires first, then this clears it).
+$('thing').addEventListener('pointerenter', () => { game.thingAwaySince = 0; });
+$('thing').addEventListener('pointerleave', () => { if (game.thing) game.thingAwaySince = performance.now(); });
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const zs = CONFIG.ZOOMS, i = zs.indexOf(cam.zoom);
