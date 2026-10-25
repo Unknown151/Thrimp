@@ -185,7 +185,10 @@ function render(alpha) {
     const p = thrimpPos(th, alpha);
     if (!inView(p.x, p.y)) continue;
     shadow(p.x, p.y, th.stage === 'child' ? 4 : 5, 1);
-    list.push({ y: p.y + 0.5, draw: () => {
+    // Someone seated on a side bench sits on it, so they're drawn after their table (benches included); the seat at
+    // the far end stays behind the table.
+    const bench = th.pose === 'sit' && world.seats.find(s => s.takenBy === th.id && s.face !== 'south');
+    list.push({ y: bench ? bench.table.y + 1 : p.y + 0.5, draw: () => {
       if (th.id === game.selected) ring(p.x, p.y, 8, 3, P.light[1]);
       else if (th.id === game.hovered) ring(p.x, p.y, 8, 3, P.white);
       drawThrimp(th, alpha);
