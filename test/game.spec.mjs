@@ -409,6 +409,11 @@ test('clicking a hut shows who lives there; a bush says when it can be picked', 
   await page.mouse.click(at.x, at.y);
   await expect(page.locator('#thing')).toBeVisible();
   await expect(page.locator('#t-name')).toHaveText(hut.label);
+  // The panel opens right beside the click (to its right, or its left near the screen edge).
+  const box = await page.locator('#thing').boundingBox();
+  const gap = Math.min(Math.abs(box.x - at.x), Math.abs(box.x + box.width - at.x));
+  expect(gap).toBeLessThan(30);
+  expect(Math.abs(box.y - at.y)).toBeLessThan(40);
   for (const name of hut.residents) await expect(page.locator('#t-body')).toContainText(name);
   await page.locator('#t-body .who').first().dispatchEvent('pointerdown'); // a name selects that Thrimp
   await expect(page.locator('#i-name')).toHaveText(hut.residents[0]);

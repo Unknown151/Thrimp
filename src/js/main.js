@@ -18,6 +18,7 @@ function frame(now) {
   processAlerts(now);
   updateCamera(realDt);
   render(clamp(acc / stepLen, 0, 1));
+  placeThingPanel();
   if (now - lastUi > 200) { updateUI(); lastUi = now; }
   requestAnimationFrame(frame);
 }

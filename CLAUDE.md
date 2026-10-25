@@ -90,7 +90,7 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | save round trip | after two days, a colony through `serializeWorld`, gzip and `restoreWorld` matches exactly (trail wear to within its 1/255 steps) and plays on |
 | routes | 200 routes across the path network never cross water, buildings or trees (curves included), and most bend |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
-| things panel | clicking a hut lists who lives there (a name selects them); a bush says when it can be picked |
+| things panel | clicking a hut opens a panel beside the click listing who lives there (a name selects them); a bush says when it can be picked |
 | trait tooltip | every trait has effects listed; hovering a chip shows them |
 | nameplate colour | `moodColor` runs from Endesga red (breaking) through yellow to green (happy) |
 | personal space | four Thrimps put on one spot end up more than 8 px apart |
@@ -186,7 +186,9 @@ later that day, so compare against `main` on the same machine before blaming a c
   20 s. Tests switch it off in `open()`.
 - **Things panel:** `thingAt` hit-tests drawn sprite boxes (front-most wins; a Thrimp under the pointer wins over
   everything). `game.thing` is `{ kind, id }`, looked up fresh every UI update, so it follows a site into its hut
-  (`fromSite`). Huts remember `builtDay` and `builtBy`.
+  (`fromSite`). Huts remember `builtDay` and `builtBy`. The panel opens beside the clicked world point
+  (`game.thingAnchor`) and `placeThingPanel` re-places it every frame, so it travels with the thing when the camera
+  moves, flips left near the right edge and stays on screen. The Thrimp inspector stays docked on the right.
 - **Renaming:** click the name in the inspector. Names are trimmed, at most 20 characters and unique (`world.names`
   is rebuilt from the Thrimps on load). The name is saved with the Thrimp, so no save version bump was needed.
 - **Broken things** (`table.broken`, `crate.broken`) block seats or spoil food until a `repair` job spends 4 wood.

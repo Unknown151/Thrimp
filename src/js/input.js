@@ -22,7 +22,7 @@ canvas.addEventListener('pointerup', e => {
     const w = screenToWorld(e.clientX, e.clientY);
     const th = thrimpAt(w.x, w.y);
     if (th) select(th.id);
-    else { const t = thingAt(w.x, w.y); if (t) selectThing({ kind: t.kind, id: t.id }); else { select(0); selectThing(null); } }
+    else { const t = thingAt(w.x, w.y); if (t) selectThing({ kind: t.kind, id: t.id }, w); else { select(0); selectThing(null); } }
   }
   drag = null;
   canvas.classList.remove('dragging');
