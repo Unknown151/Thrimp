@@ -40,6 +40,8 @@ function remember(th, world, text) {
   if (th.recent.length > 8) th.recent.pop();
 }
 function emote(th, world, icon, mins = 20) { th.emote = { icon, until: world.time + mins }; }
+// A short bit of body language ('wave', 'stretch'). A walker stops for it (followRoute waits). Looks only: not saved.
+function gesture(th, world, anim, mins = 3) { th.gesture = { anim, start: world.time, until: world.time + mins }; }
 // Something the player would want to see (a fight, a breakdown...). The UI shows it and may slow time and pan over
 // (ui.js); the simulation never waits for it. Not saved.
 function raiseAlert(w, text, x, y, who = []) {

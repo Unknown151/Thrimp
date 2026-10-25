@@ -26,6 +26,12 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 - [x] Polish 1: click huts, sites, bushes and trees for an info panel; trouble (fights, breaks, smashing,
   break-ups) shows a notice and, if "Jump there" is on, slows to 1x and pans over; trait tooltips; nameplates on
   everyone coloured by mood; personal space (Thrimps step round each other); renaming Thrimps
+- [x] Polish 2: smooth curving trails, crisp ground edges, things panel beside the click that closes on its own
+- [x] Feel 1: weather (clear, cloudy, rain, fog) that touches moods and plans; living world (butterflies, ground
+  birds that scatter, flocks overhead, fireflies, fish rings, rain, fog, cloud shadows, chimney smoke, wind in the
+  trees, warm dusk light); expressive Thrimps (eating, sitting at the table, lying in the grass, curling up to sleep
+  outdoors, waving to friends, stretching on waking, looking around, new emotes). Later: sound, seasons, more
+  critters, Thrimp variants
 - [ ] 5. **Narrator + chronicle:** tension director, first ~10 events, chronicle UI
 - [ ] 6. **Life cycle:** births, aging, death, marriages, family, inheritance of grudges
 - [ ] 7. **Resources & pressure:** depletion, invention, relocation and splitting
@@ -33,7 +39,8 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
 - [ ] 9. **Claude voice:** diaries, prayers, chronicle chapters, myths
 - [ ] 10. **Art pass:** mostly done: Thrimp (idle, walk, gather, chop), 3 huts, canteen, table, crates, woodpile,
   chopping block, 5 trees, stump, bushes full/bare, rocks, flowers, reeds, basket. Still procedural: the ground,
-  emote bubbles, the carried log. Later: eating/sleeping/dying animations, Thrimp variants (aging, sickness)
+  emote bubbles, the carried log. Eating, sitting, sleeping, waving and stretching are done (Feel 1). Later: dying
+  animation, Thrimp variants (aging, sickness)
 - [ ] 11. **Content:** grow events toward 40, then 100
 
 ## Known issues

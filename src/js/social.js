@@ -88,6 +88,8 @@ function stopFor(th, w, other, mins, label, working) {
 // --- Encounters: who does what depends on what they think of each other, and who they are ---
 const SOCIAL = [
   { id: 'nod', when: (a, b, op) => op > -25, weight: () => 0.6, do: (a, b) => { changeOpinion(a, b, 1); changeOpinion(b, a, 1); } },
+  // Friends stop for a moment and wave to each other.
+  { id: 'wave', when: (a, b, op) => op >= 25 && opinionOf(b, a) >= 10 && canStop(a) && canStop(b), weight: () => 0.8, do: wave },
   { id: 'chat', when: (a, b, op) => op > -15,
     weight: (a, b, op) => (hasTrait(a, 'shy') ? 0.4 : 1.2) * (hasTrait(a, 'curious') && Math.abs(op) < 15 ? 1.6 : 1) * (2 - a.needs.social),
     do: chat },
@@ -118,6 +120,13 @@ function doSocial(a, b, w, id) {
   if (id !== 'nothing' && id !== 'fight') w.stats[id] = (w.stats[id] || 0) + 1;
 }
 
+function wave(a, b, w) {
+  for (const [x, y] of [[a, b], [b, a]]) {
+    x.dir = dirFromVec(y.x - x.x, y.y - x.y);
+    gesture(x, w, 'wave', 3);
+    changeOpinion(x, y, 1);
+  }
+}
 function chat(a, b, w) {
   for (const [x, y] of [[a, b], [b, a]]) {
     // Good chemistry makes a chat warm; bad chemistry makes it grate, and it adds up over time.

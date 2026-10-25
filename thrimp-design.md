@@ -52,7 +52,7 @@ Status: **design phase, nothing built yet.** Lines marked **[Decided]** are sett
   - **Finite:** stone, metal, old-growth wood. Gone when gone.
   - **Hidden:** unknown until someone invents a use (cave mushrooms, clay, deep water).
 - **[Proposed]** Scarcity creeps in gradually and drives two responses:
-  - **Invention under pressure:** a curious, desperate Thrimp has a chance to discover fishing traps, farming, mining… ("Old Mott invented farming during the Grey Rot").
+  - **Invention under pressure:** a curious, desperate Thrimp has a chance to discover fishing traps, farming, mining… ("Old Mott invented farming during the Grey Rot"). Where this could lead over the long run is in section 14 (Ages).
   - **Relocation as the Thrimps' own decision:** when things get bad, factions form (stay and pray vs. leave). The colony may move together or split, and splinter groups can vanish, die out, or return years later as strangers.
 
 ---
@@ -311,3 +311,80 @@ Main loop: fixed-step simulation tick, decoupled from rendering (`requestAnimati
 - Should the **narrator be a visible character**, or stay an invisible hand whose work shows in the chronicle?
 - Exact **sprite size, palette and view angle** for the style guide.
 - Which **narrator styles** to ship, and can the player choose one at the start of a run?
+- **Ages** (see section 14): how far should a colony be able to go, and how much real time should an age take?
+
+---
+
+## 14. Ages (long-term progression)
+
+Everything here is **[Proposed]**. Nothing is decided yet.
+
+### The idea
+A colony can climb through ages (from foraging towards, in the furthest version, the space age) **on its own**, the
+same way it builds its own huts. There is no tech tree for the player to click. Progress comes out of the
+simulation: a Thrimp under pressure, or inspired, or nudged by the god's "whisper an idea", invents something, and
+the chronicle records it ("The Iron Age began when Grett smelted the first bloom, the winter the berries failed").
+
+### Possible ages
+| Age | What changes | Example inventions |
+|---|---|---|
+| **Foraging** (today) | Berries, wood, huts, a canteen | Already built |
+| **Settled** | Farming, storage, fishing, the first crafts | Fields, fish traps, granary, pottery |
+| **Bronze & iron** | Mining, smelting, tools, specialised workers | Mine, smithy, tools that speed up work |
+| **Towns** | Stone buildings, roads, leaders and laws, trade between settlements | Quarry, market, town hall, paved roads |
+| **Industrial** | Workshops become factories, rail, smoke | Mill, factory, railway |
+| **Modern** | Electricity, machines, much bigger population | Power plant, vehicles, schools |
+| **Space** | Rockets; a launch could be one way a run "ends" | Launch site, rocket |
+
+A sensible first goal is the first three ages; later ages only if those prove fun.
+
+### How it could work
+- **Knowledge is data.** An `INVENTIONS` list, each entry with what it needs (earlier inventions, a resource someone has
+  seen), the pressure that makes it likely (hunger, cold, a trait like curious), and what it unlocks (jobs, buildings,
+  items, thoughts). An age is a named group of inventions; it begins when its key invention lands.
+- **Knowledge lives in heads.** Thrimps who know a craft teach it to others while working beside them. If the last
+  smith dies before teaching anyone, smithing is lost and the colony can slide back an age. Fits pillar 3
+  ("Grimy, but not only grim"): progress is real but fragile.
+- **The world shows the age.** Buildings swap to their new art, Thrimps get new outfits (`create_character_state`),
+  well-worn trails become paved roads.
+- **Scarcity drives it.** Ties to section 3 (Resources): depletion creates the pressure, invention answers it,
+  relocation or splitting happens when invention doesn't come in time.
+
+### The hard problems
+1. **Time.** A game day is about 6 real minutes, and the world only lives while the page is open. Reaching space
+   through natural generations could take 50-100+ hours of open page. Options:
+   - **Natural pace:** ages take generations; a run to space is a long-term thing.
+   - **Compressed pace:** inventions come fast, several ages within one lifetime.
+   - **Era jumps:** at an age boundary, "decades pass" as an in-game event while the page is open (not offline
+     catch-up). The chronicle and Claude summarise what happened in between.
+2. **Scale.** Today: 12 Thrimps, each simulated in full. The target is a few hundred. Later ages would need
+   **named Thrimps you follow plus a background population** counted as numbers.
+3. **What kind of game it becomes.** Early ages keep the close-up RimWorld feel (who loves whom, who smashed the
+   table). Late ages pull towards a Civilization-style strategy game. Both can work, but it shapes every system.
+4. **Space.** Factories and launch sites don't fit on one meadow: bigger maps, or the named-places idea (section 3,
+   still open).
+
+### Rough size
+Measured against what is built so far (about five phases: sandbox, inner life, social, trails and building, saves and
+polish):
+
+| Goal | Rough size |
+|---|---|
+| Finish the build order in section 12 | About 8-12 more phases |
+| "Ages light": 4-6 ages in one village of named Thrimps | About 10-15 phases on top |
+| Full ages to space: towns, settlements, trade, war, factories, rockets | About 30-40+ phases, a few months |
+
+Art is the cheap part: about 20-40 objects and a few outfits per age, roughly 50-100 PixelLab generations.
+Playtesting and balance will take about as long as the code.
+
+### Suggested route
+Build step 7 (Resources & pressure) around a general knowledge-and-ages system, and use it to make a **vertical
+slice of three ages** (foraging, settled, bronze & iron). That shows whether ages feel good in Thrimp before
+committing to more.
+
+### Open questions
+- How far should a colony be able to go: three ages, towns, or all the way to space?
+- Which time option: natural pace, compressed, or era jumps?
+- Can knowledge be lost (a colony sliding back an age), or only gained?
+- Is a space launch an ending, or does the run go on?
+- Does every run start in the foraging age, or can a run start later?

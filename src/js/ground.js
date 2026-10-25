@@ -84,16 +84,19 @@ function paintGround(world, P) {
   // PixelLab props painted flat into the ground: they're scenery, not obstacles.
   const clearOfBuildings = (x, y) => !world.noBuild.some(rc => x > rc.x0 - 8 && x < rc.x1 + 8 && y > rc.y0 - 8 && y < rc.y1 + 8);
   const stamp = (name, count, ok) => {
-    const s = art(name);
-    if (!s) return;
+    const s = art(name), spots = [];
+    if (!s) return spots;
     for (let i = 0, placed = 0; i < count * 40 && placed < count; i++) {
       const [x, y] = at();
       if (!ok(x, y) || !clearOfBuildings(x, y)) continue;
       g.drawImage(s.img, x - s.ax, y - s.ay);
+      spots.push({ x, y });
       placed++;
     }
+    return spots;
   };
-  stamp('flowers', 60, (x, y) => meadow(x, y) && sampleField(world.forestF, x, y) < 0.4);
+  // Where the flowers are, for the butterflies (ambience.js). Looks only, so it isn't saved.
+  world.flowerSpots = stamp('flowers', 60, (x, y) => meadow(x, y) && sampleField(world.forestF, x, y) < 0.4);
   stamp('rocks', 35, meadow);
   stamp('reeds', 50, (x, y) => { const wv = sampleField(world.waterF, x, y); return wv > T - 0.012 && wv < T + 0.004; });
   return c;

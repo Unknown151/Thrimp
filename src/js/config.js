@@ -39,10 +39,13 @@ const P = {
 
 // PixelLab sprite sheets: one row per direction (in this order), one column per frame.
 const SHEET_DIRS = ['south', 'south-east', 'east', 'north-east', 'north', 'north-west', 'west', 'south-west'];
-// Keys are what `th.working` is set to while a Thrimp does that action ('gather', 'chop').
+// Keys are what `th.working` is set to while a Thrimp does that action ('gather', 'chop', 'eat'); `sit` and `sleep`
+// are still poses (`th.pose`), `wave` and `stretch` short gestures (`th.gesture`), `sit-eat` eating while seated.
 const THRIMP_SHEETS = {
   idle: 'assets/thrimp/idle.png', walk: 'assets/thrimp/walk.png',
   gather: 'assets/thrimp/gather.png', chop: 'assets/thrimp/chop.png', fight: 'assets/thrimp/fight.png',
+  eat: 'assets/thrimp/eat.png', 'sit-eat': 'assets/thrimp/sit-eat.png', sit: 'assets/thrimp/sit.png',
+  sleep: 'assets/thrimp/sleep.png', wave: 'assets/thrimp/wave.png', stretch: 'assets/thrimp/stretch.png',
 };
 
 // PixelLab object art, one PNG each in assets/objects/. The world is generated after these load, because

@@ -87,7 +87,7 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | trail cost | a fully worn edge costs under 70% of fresh grass, in `walkCost` and in the graph |
 | building | the homeless pair raises one shared hut through all three stages within 4 days and moves in |
 | site choice | a spot next to a rival's home scores well below the same spot next to a friend's |
-| save round trip | after two days, a colony through `serializeWorld`, gzip and `restoreWorld` matches exactly (trail wear to within its 1/255 steps) and plays on |
+| save round trip | after two days, a colony (weather included) through `serializeWorld`, gzip and `restoreWorld` matches exactly (trail wear to within its 1/255 steps) and plays on |
 | routes | 200 routes across the path network never cross water, buildings or trees (curves included), and most bend |
 | inspector | clicking a Thrimp opens its inspector, Esc closes it |
 | things panel | clicking a hut opens a panel beside the click listing who lives there (a name selects them); it stays while the pointer is on it and closes when the pointer moves away; a bush says when it can be picked |
@@ -96,11 +96,16 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | personal space | four Thrimps put on one spot end up more than 8 px apart |
 | alerts | a fight shows a notice, drops 3x to 1x and selects the attacker (with "Jump there" on) |
 | renaming | a new name shows in the inspector, is trimmed, can't copy someone else's, and survives a save |
+| weather | over six days the weather changes; rain gives those outside "soaked" and those asleep at home "rain on the roof"; the HUD shows it |
+| poses and gestures | someone eats seated at a table (sit-eat frames), a sleeper outdoors lies down, friends face each other and wave, and a walker waits for the wave before walking on |
+| weather drawing | clear, cloudy, rain and fog, by day, dusk and night, draw without page errors; rain falls, and no fireflies come out in it |
 | pacing | one game day simulates in under 1.5 s |
 
 **Pacing baseline:** one game day with 12 Thrimps takes about 55-60 ms in Edge on Rasmus's PC on a quiet day
 (2026-10-23, with social life, trails and building; it was 21-25 ms before those). The same build measured 130-150 ms
 later that day, so compare against `main` on the same machine before blaming a change. Personal space adds ~10 ms.
+Drawing (not in that number): a whole frame zoomed out in heavy rain at 12x renders in about 2-3 ms; the ambience
+update is under 0.1 ms.
 
 ## Source map
 
@@ -118,16 +123,18 @@ later that day, so compare against `main` on the same machine before blaming a c
 | `src/js/mind.js` | `TRAITS` (+ `TRAIT_EFFECTS` for the tooltip), `THOUGHTS` (moodlets), mood, mental breaks (`BREAKS`), inspirations, repairs |
 | `src/js/social.js` | Spatial hash, opinions, chemistry, grudges, memories, `SOCIAL` encounters, fights, couples, gossip, personal space |
 | `src/js/construction.js` | Who needs a home, site choice (`siteScore`), building sites in stages, build jobs, completion |
+| `src/js/weather.js` | `WEATHER` (clear, cloudy, rain, fog), hourly changes and wind, what the sky does to moods |
 | `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
-| `src/js/sprites.js` | Procedural sprites (buildings, trees, bushes, emotes) and PixelLab sheet loading |
-| `src/js/ground.js` | Paints the ground once into one big pixel canvas |
+| `src/js/sprites.js` | Procedural sprites (buildings, trees, bushes, emotes), PixelLab sheet loading, `thrimpSprite` (which frame a Thrimp shows) |
+| `src/js/ground.js` | Paints the ground once into one big pixel canvas; remembers where the flowers are |
 | `src/js/render.js` | Canvas, camera, y-sorted drawing, night lighting, debug overlay, mood-coloured nameplates |
+| `src/js/ambience.js` | Looks-only life: butterflies, birds, fireflies, fish rings, rain, fog, cloud shadows, smoke, leaves, swaying trees, dusk light |
 | `src/js/ui.js` | HUD, inspector, things panel (huts, sites, bushes, trees), alert notices and the camera jump, trait tooltip, renaming |
 | `src/js/input.js` | Mouse, wheel, keyboard, camera movement, follow and the glide to an alert |
 | `src/js/save.js` | `serializeWorld` / `restoreWorld`, gzip, talking to the Worker, autosave, "New world" |
 | `src/js/main.js` | Fixed-step main loop, `init` (load the save or make a world), the `window.thrimp` console/test handle |
 | `worker/index.js` | The Cloudflare Worker for `/api/save`: Access token check, KV storage, conflict check |
-| `assets/` | Shipped art: `thrimp/*.png` (idle, walk, gather, chop sheets), `objects/*.png`, `favicon.png` |
+| `assets/` | Shipped art: `thrimp/*.png` (idle, walk, gather, chop, fight, eat, sit-eat, sit, sleep, wave, stretch sheets), `objects/*.png`, `favicon.png` |
 | `art/` | Raw PixelLab downloads, `pixellab-objects.json` (object name -> id), previews (not shipped) |
 | `tools/` | `build-sheet.ps1` (frames -> palette-locked sheet), `fetch-frames.ps1`, `fetch-objects.ps1` |
 | `test/` | Playwright tests; `shots.mjs` saves screenshots of a fresh world (needs `npm run dev`) |
@@ -193,6 +200,24 @@ later that day, so compare against `main` on the same machine before blaming a c
   by `closeThingIfAway`); opening it from code doesn't start that clock. The Thrimp inspector stays docked on the right.
 - **Renaming:** click the name in the inspector. Names are trimmed, at most 20 characters and unique (`world.names`
   is rebuilt from the Thrimps on load). The name is saved with the Thrimp, so no save version bump was needed.
+- **Weather** is simulation (sim rng, saved as `w.weather`): clear, cloudy, rain or fog, each lasting a few hours,
+  changed hourly by `WEATHER[kind].next` weights (fog only settles before dawn). Wind eases toward a target per
+  weather. Rain gives "Got soaked" (-3) to anyone outdoors and "Rain on the roof" (+3) to those asleep at home, makes
+  lounging by the water or in the grass unlikely, and clear middays sometimes give "Enjoyed the sunshine". Saves from
+  before the weather start clear.
+- **Ambience** (`ambience.js`) only decorates: it never touches the simulation and uses `Math.random`, not `rand`.
+  `updateAmbience(realDt)` runs every frame on real time, capped at 3x and frozen while paused, and eases rain, cloud
+  and fog in and out so weather changes fade rather than snap. Critters live near the camera and come and go;
+  ground birds fly off when a Thrimp comes within 30 px. Trees sway by shifting their top 60% a pixel in the wind.
+  Chimney smoke comes only from art with a chimney (`CHIMNEYS`, measured from the PNG). Fog is the one deliberately
+  smooth (non-pixel) layer.
+- **Poses and gestures** (looks, set by jobs, not saved): `th.pose` is `'sit'` (eating at a seat, relaxing) or
+  `'sleep'` (lying in the grass); sleeping outdoors also lies down. `th.gesture` (`gesture(th, w, 'wave' | 'stretch')`)
+  is a few game minutes of body language; a walker stops for it (`followRoute` waits), which is the one way it
+  touches the sim. Friends (opinion 25+, liked back) can wave instead of nodding; Thrimps stretch on waking and
+  sometimes while looking around. `thrimpSprite` picks, in order: walk, gesture, work action (seated eating uses
+  `sit-eat`), still pose, idle breathing. Gestures and seated eating exist facing south/east/north/west only;
+  `animFacing` uses the nearest side for diagonals.
 - **Broken things** (`table.broken`, `crate.broken`) block seats or spoil food until a `repair` job spends 4 wood.
 - **Sprites** are anchored at the feet (`ax`, `ay`). Sheet frames share one baseline per direction (the lowest foot
   in any frame) so feet stay planted. Walk frames advance with distance walked, idle frames with game time.
@@ -216,8 +241,14 @@ later that day, so compare against `main` on the same machine before blaming a c
   Rows follow `SHEET_DIRS` in `config.js`.
 - Template animations drift off-palette (one turned the tunic red). `-PaletteFrom` snaps frames to the character's own
   colours, which fixes that. Skip `-PaletteFrom` when an animation adds a prop with new colours (the chop axe).
-- Action animations: `th.working` names the sheet (`'gather'`, `'chop'`); a sheet may cover only some directions
-  (chop is east/west only). `tools/fetch-frames.ps1` downloads one direction of an animation.
+- Action animations: `th.working` names the sheet (`'gather'`, `'chop'`, `'eat'`); a sheet may cover only some
+  directions (chop is east/west only). `tools/fetch-frames.ps1` downloads one direction of an animation.
+- Character states (same Thrimp, new pose, 8 rotations): Sitting `bb523548-5899-4752-ac62-1cb422357a5c` (its own
+  `sit-eat` animation), Sleeping `5b3cb4c4-6d02-4723-8327-e3279fcd14fc`. A state's rotations make a one-frame sheet
+  (`sit.png`, `sleep.png`). `eat` is the `drinking` template; `wave`, `stretch` and `sit-eat` are custom (v3)
+  animations made for four directions only (about 1 generation each).
+- Custom (v3) animations come back on bigger canvases that differ per direction (40 px south, 44 px east);
+  `build-sheet.ps1` centres every frame in the largest size, and the loader finds the feet per direction.
 - **Objects** (buildings, trees, bushes, props) are made with `create_object_pro_flash`: `n_directions: 1`,
   `view: low top-down`, the full Endesga 32 `palette` (so no snapping is needed), and a `style_image` from the same
   family (buildings use the hut, trees the oak, small props the Thrimp). Record every object in

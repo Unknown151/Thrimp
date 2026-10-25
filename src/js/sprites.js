@@ -148,6 +148,9 @@ const EMOTE_ICONS = {
   heart: ['.#.#.', '#####', '#####', '.###.', '..#..'],
   anger: ['#.#.#', '.###.', '##.##', '.###.', '#.#.#'],
   chat: ['.....', '.....', '#.#.#', '.....', '.....'],
+  idea: ['.###.', '#...#', '#...#', '.###.', '..#..'],
+  sweat: ['..#..', '..#..', '.###.', '.###.', '..#..'],
+  rain: ['.###.', '#####', '.....', '#.#.#', '.#.#.'],
 };
 function drawEmote(P, rows, color) {
   const c = makeCanvas(11, 11), g = c.getContext('2d');
@@ -184,6 +187,9 @@ function buildSprites(P) {
       heart: drawEmote(P, EMOTE_ICONS.heart, P.berry[1]),
       anger: drawEmote(P, EMOTE_ICONS.anger, P.berry[0]),
       chat: drawEmote(P, EMOTE_ICONS.chat, P.outline),
+      idea: drawEmote(P, EMOTE_ICONS.idea, P.light[1]),
+      sweat: drawEmote(P, EMOTE_ICONS.sweat, P.water[1]),
+      rain: drawEmote(P, EMOTE_ICONS.rain, P.water[0]),
     },
     placeholder: { front: drawPlaceholderThrimp(P, false), back: drawPlaceholderThrimp(P, true) },
   };
@@ -248,11 +254,24 @@ function loadThrimpSheet(name, src) {
   };
   img.src = src;
 }
+// Frames for an animation facing `dir`, or the nearest side it was made for: gestures and seated eating exist only
+// facing south, east, north and west, so a Thrimp facing south-east uses the east frames.
+function animFacing(name, dir) {
+  const a = thrimpAnims[name];
+  if (!a) return null;
+  return a[dir] || a[dir.split('-')[1]] || a[dir.split('-')[0]] || null;
+}
 function thrimpSprite(th) {
   const walk = th.moving && thrimpAnims.walk && thrimpAnims.walk[th.dir];
   if (walk) return walk[Math.floor(th.stepPhase / CONFIG.WALK_PX_PER_FRAME) % walk.length];
-  const action = th.working && thrimpAnims[th.working] && thrimpAnims[th.working][th.dir];
+  const gesture = th.gesture && animFacing(th.gesture.anim, th.dir);
+  if (gesture) return gesture[Math.floor(Math.max(0, world.time - th.gesture.start) / CONFIG.ACTION_MIN_PER_FRAME * 2) % gesture.length];
+  const working = th.working === 'eat' && th.pose === 'sit' ? 'sit-eat' : th.working;
+  const action = working && animFacing(working, th.dir);
   if (action) return action[Math.floor(world.time / CONFIG.ACTION_MIN_PER_FRAME + th.id * 1.3) % action.length];
+  const still = th.asleep && !th.hidden ? 'sleep' : th.pose;
+  const pose = still && animFacing(still, th.dir);
+  if (pose) return pose[0];
   const idle = thrimpAnims.idle && thrimpAnims.idle[th.dir];
   if (idle) return idle[Math.floor(world.time / CONFIG.IDLE_MIN_PER_FRAME + th.id * 1.7) % idle.length]; // offset per Thrimp so they don't breathe in unison
   return th.dir.startsWith('north') ? sprites.placeholder.back : sprites.placeholder.front;
