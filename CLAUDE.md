@@ -99,6 +99,11 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | weather | over six days the weather changes; rain gives those outside "soaked" and those asleep at home "rain on the roof"; the HUD shows it |
 | poses and gestures | someone eats seated at a table (sit-eat frames), a sleeper outdoors lies down, friends face each other and wave, and a walker waits for the wave before walking on |
 | weather drawing | clear, cloudy, rain and fog, by day, dusk and night, draw without page errors; rain falls, and no fireflies come out in it |
+| growing old | a Thrimp past 30 days is an elder: slower, grey-haired, "Old bones", shown as "Elder, 62" |
+| children | a settled couple's due child is born at home, loved by and labelled as their child; at 8 days it grows up |
+| old age | past their lifespan a Thrimp dies, gets a grave and a `w.dead` record; the partner is widowed and goes to the grave |
+| fever | a fever hurts health, keeps them in bed, can spread on meeting, passes and leaves them immune |
+| murder | a violent Thrimp's murderous break kills their enemy (`killed`, with killer); friends of the victim turn on the killer |
 | pacing | one game day simulates in under 1.5 s |
 
 **Pacing baseline:** one game day with 12 Thrimps takes about 55-60 ms in Edge on Rasmus's PC on a quiet day
@@ -124,6 +129,7 @@ update is under 0.1 ms.
 | `src/js/social.js` | Spatial hash, opinions, chemistry, grudges, memories, `SOCIAL` encounters, fights, couples, gossip, personal space |
 | `src/js/construction.js` | Who needs a home, site choice (`siteScore`), building sites in stages, build jobs, completion |
 | `src/js/weather.js` | `WEATHER` (clear, cloudy, rain, fog), hourly changes and wind, what the sky does to moods |
+| `src/js/life.js` | Ages and life stages, health, fever, births and inheritance, deaths, grief, graves and mourning |
 | `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
 | `src/js/sprites.js` | Procedural sprites (buildings, trees, bushes, emotes), PixelLab sheet loading, `thrimpSprite` (which frame a Thrimp shows) |
 | `src/js/ground.js` | Paints the ground once into one big pixel canvas; remembers where the flowers are |
@@ -218,6 +224,26 @@ update is under 0.1 ms.
   sometimes while looking around. `thrimpSprite` picks, in order: walk, gesture, work action (seated eating uses
   `sit-eat`), still pose, idle breathing. Gestures and seated eating exist facing south/east/north/west only;
   `animFacing` uses the nearest side for diagonals.
+- **Life cycle** (`life.js`, decided with Rasmus 2026-10-25: about 40 game days of life; death by age, hunger,
+  fever or violence). Each Thrimp has `born` (game time), its own `lifespan` (34-46 days) and a cached `stage`
+  (child under 8 days, elder from 30), refreshed hourly; ages show as years (2 a day). Children don't work (they
+  play), elders and the sick work less, and children, elders and the badly hurt walk slower (`paceOf`).
+  `health` (0-1) drains while starving or feverish and heals while fed; fights hurt (a murderous break hits about
+  3.5x); at 0 the Thrimp dies. Deaths are queued (`markDead`) and handled at the end of the tick (`processDeaths`):
+  out of `w.thrimps`, into `w.dead`, a grave in the graveyard (picked at the first death), grief thoughts by bond,
+  the bereaved add the grave to `mourn` and go stand at it, a killer is blamed by everyone. Fevers start at random
+  (more often when soaked, starving, young or old), spread at encounters (5%), last 1-3 days, keep the sick in bed,
+  and leave 10 days' immunity.
+- **Families:** founders are 12 adults: three young couples sharing huts, housemates, and two homeless. A couple
+  (both adults, 50+ both ways, a roof, food enough, under 40 Thrimps) expects about once a day, waits a day and a
+  half, then has a child at home; at least 2.5 days between children, at most 5. Children take half of their
+  parents' traits and mostly a parent's hair, and start with a share of their parents' strong feelings and grudges.
+  Romance stays within a stage (adults with adults), never within a family; single adults court their crush
+  (`crushOf`), which ends in a flirt. Empty huts are moved into before anyone builds. Tuned so 50-day colonies mostly
+  hold 10-30 Thrimps; some shrink, none died out in testing.
+- **Hair** is painted in code (`withHair` in sprites.js): the art's hair highlights are #262b44, its dark hair shares
+  #181425 with the outline, so only dark pixels touching a highlight and not on the edge are recoloured. Colours:
+  black, brown, ginger, blond, plum, and grey for every elder. Recoloured frames are cached per frame and colour.
 - **Broken things** (`table.broken`, `crate.broken`) block seats or spoil food until a `repair` job spends 4 wood.
 - **Sprites** are anchored at the feet (`ax`, `ay`). Sheet frames share one baseline per direction (the lowest foot
   in any frame) so feet stay planted. Walk frames advance with distance walked, idle frames with game time.
@@ -247,6 +273,10 @@ update is under 0.1 ms.
   `sit-eat` animation), Sleeping `5b3cb4c4-6d02-4723-8327-e3279fcd14fc`. A state's rotations make a one-frame sheet
   (`sit.png`, `sleep.png`). `eat` is the `drinking` template; `wave`, `stretch` and `sit-eat` are custom (v3)
   animations made for four directions only (about 1 generation each).
+- Children: character `98e2bd52-5888-49df-b32f-576932729ffe` (v3, 24 px canvas, so they really are smaller; a state
+  of the base Thrimp keeps adult height, so `74e03353-...` "Child" isn't used). Its colours drifted pale, so its
+  sheets are built with `-PaletteFrom` the adult's rotations. Children use only `child-walk` and `child-idle`.
+- Graves: objects `grave` (fresh) and `grave-old` (from 4 days on).
 - Custom (v3) animations come back on bigger canvases that differ per direction (40 px south, 44 px east);
   `build-sheet.ps1` centres every frame in the largest size, and the loader finds the feet per direction.
 - **Objects** (buildings, trees, bushes, props) are made with `create_object_pro_flash`: `n_directions: 1`,

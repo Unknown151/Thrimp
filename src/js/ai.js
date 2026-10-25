@@ -31,7 +31,7 @@ function followRoute(th, w) {
   const r = th.route;
   if (!r || !r.length) { th.moving = false; return true; }
   if (th.gesture) { th.moving = false; return false; } // stopped to wave; walks on when it's done
-  let budget = th.speed * CONFIG.MIN_PER_TICK;
+  let budget = th.speed * CONFIG.MIN_PER_TICK * paceOf(th);
   if (th.needs.rest < 0.2) budget *= 0.8;
   if (th.needs.food < 0.1) budget *= 0.85;
   const start = budget;
@@ -143,7 +143,7 @@ function sleepStep(w, home) {
       t.needs.rest = Math.min(1, t.needs.rest + dt / 360);
       t.sleptFor += dt;
       if (t.needs.food < 0.15) { if (t.sleptFor > HOUR) addThought(t, w, 'woke_hungry'); return true; }
-      return t.needs.rest >= 1 && !isSleepTime(t, hourOf(w.time));
+      return t.needs.rest >= 1 && !isSleepTime(t, hourOf(w.time)) && !t.sick; // the sick stay in bed
     },
     end(t) {
       t.asleep = false;
@@ -233,6 +233,8 @@ function makeRelaxJob(th, w) {
   if (freeSeats(w).length) options.push({ weight: hasTrait(th, 'shy') ? 0.4 : 1.5, where: 'at the canteen', seat: true });
   const n = pick(nearbyMainNodes(w, th.x, th.y, 260));
   if (n) options.push({ weight: wet, where: 'in the grass', spot: { x: n.x + randRange(-10, 10), y: n.y + randRange(-10, 10), face: pick(DIRS) } });
+  const grave = lovedGrave(th, w); // sitting a while with someone they've lost
+  if (grave) options.push({ weight: 0.5 * wet, where: `by ${grave.name}'s grave`, grave: true, spot: { x: grave.x + randRange(-8, 8), y: grave.y + 9, face: 'north' } });
   const o = weightedPick(options, o => o.weight);
   if (!o) return null;
   const spot = o.seat ? claimSeat(w, th) : o.spot;
@@ -243,11 +245,27 @@ function makeRelaxJob(th, w) {
       begin: t => { t.dir = spot.face || t.dir; t.pose = o.where === 'in the grass' && chance(0.5) ? 'sleep' : 'sit'; },
       end: t => { t.pose = null; },
       each: (t, w2, dt) => { t.needs.fun = Math.min(1, t.needs.fun + dt / 60); if (t.needs.fun >= 1) return 'done'; },
-      finish: t => addThought(t, w, o.seat ? 'relaxed_canteen' : o.where === 'by the water' ? 'relaxed_water' : 'relaxed_grass'),
+      finish: t => addThought(t, w, o.seat ? 'relaxed_canteen' : o.grave ? 'visited_grave' : o.where === 'by the water' ? 'relaxed_water' : 'relaxed_grass'),
     }),
   ], { cleanup: t => releaseSeat(w, t) });
 }
 
+// Children run about near home or wherever the other children are, a few short dashes at a time.
+function makePlayJob(th, w) {
+  const friend = w.thrimps.find(o => o !== th && o.stage === 'child' && !o.hidden && !o.asleep && dist(o.x, o.y, th.x, th.y) < 300);
+  const home = w.byId.get(th.home), base = friend || (home ? home.door : w.canteen.door);
+  const steps = [];
+  for (let i = 0; i < 3; i++) {
+    const n = nearbyMainNodes(w, base.x, base.y + 20, 70);
+    const p = n.length ? pick(n) : { x: base.x, y: base.y + 20 };
+    steps.push(goTo(p.x + randRange(-14, 14), p.y + randRange(-10, 10), friend ? `Playing with ${friend.name}` : 'Running about'));
+  }
+  steps.push(act(randRange(8, 15), friend ? `Playing with ${friend.name}` : 'Playing', {
+    each: (t, w2, dt) => { t.needs.fun = Math.min(1, t.needs.fun + dt / 40); if (friend) t.needs.social = Math.min(1, t.needs.social + dt / 120); },
+    begin: t => { if (chance(0.3)) emote(t, w, 'note', 10); },
+  }));
+  return job(friend ? `Playing with ${friend.name}` : 'Playing', steps);
+}
 function makeWanderJob(th, w) {
   const n = pick(nearbyMainNodes(w, th.x, th.y, hasTrait(th, 'curious') ? 340 : 160));
   if (!n) return null;
@@ -272,7 +290,13 @@ const ACTIONS = [
   { id: 'sleep', make: makeSleepJob, score(th, w) {
     const r = th.needs.rest;
     if (isSleepTime(th, hourOf(w.time))) return 0.95 + (1 - r) * 0.3;
+    if (th.sick) return 0.9; // a fever keeps them in bed
     return r < 0.2 ? 1.15 - r : 0;
+  } },
+  { id: 'mourn', make: makeMournJob, score: (th, w) => th.mourn.length && !isSleepTime(th, hourOf(w.time)) ? 0.95 : 0 },
+  { id: 'play', make: makePlayJob, score(th, w) {
+    if (th.stage !== 'child' || isSleepTime(th, hourOf(w.time))) return 0;
+    return 0.45 + (1 - th.needs.fun) * 0.5;
   } },
   { id: 'haul', make: makeHaulJob, score: th => th.carrying ? 0.85 : 0 },
   { id: 'build', make: makeBuildJob, score(th, w) {
@@ -301,11 +325,14 @@ const ACTIONS = [
   } },
   { id: 'wander', make: makeWanderJob, score: th => 0.12 * traitMult(th, 'wander') },
   { id: 'socialize', make: makeSocializeJob, score(th, w) {
-    const s = (1 - th.needs.social) * 0.7 * (hasTrait(th, 'shy') ? 0.5 : 1);
+    const crush = crushOf(th, w), longing = crush ? clamp((opinionOf(th, crush) - 25) / 100, 0, 0.35) : 0; // in love, they seek them out
+    const s = (1 - th.needs.social) * 0.7 * (hasTrait(th, 'shy') ? 0.5 : 1) + longing;
     return isWorkTime(th, hourOf(w.time)) ? s * 0.6 : s + 0.15;
   } },
 ];
-const workDrive = th => traitMult(th, 'work') * (th.inspiration ? 1.4 : 1);
+// Children don't work; elders and the sick do less.
+const workDrive = th => th.stage === 'child' ? 0
+  : traitMult(th, 'work') * (th.inspiration ? 1.4 : 1) * (th.stage === 'elder' ? 0.6 : 1) * (th.sick ? 0.3 : 1);
 
 function chooseJob(th, w) {
   const scored = [];
@@ -368,7 +395,9 @@ function checkInterrupts(th, w) {
 }
 
 function updateThrimp(th, w, dt) {
+  if (th.dead) return; // gone at the end of this tick
   updateNeeds(th, dt);
+  updateBody(th, w, dt);
   if (w.time >= th.nextMind) { th.nextMind = w.time + MIND_EVERY; refreshMind(th, w); }
   else th.mood = moodOf(th, w); // cheap, and keeps mood exact when a thought runs out between refreshes
   if (th.emote && th.emote.until < w.time) th.emote = null;
@@ -395,7 +424,9 @@ function tick(w) {
     updateTrailCosts(w);
     planBuilding(w);
     updateWeather(w);
+    lifeHourly(w);
   }
   for (const th of w.thrimps) updateThrimp(th, w, dt);
   separateThrimps(w);
+  processDeaths(w);
 }

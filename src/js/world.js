@@ -234,13 +234,26 @@ function tryGenerateWorld() {
     if (face && nearestVisibleNode(world, x, y) >= 0) world.shoreSpots.push({ x, y, face });
   }
 
+  // Founders, two to a hut. The first three huts hold young couples who came here together (so the first children
+  // come within days); the rest are housemates, and the last two have no hut yet.
   const huts = world.buildings.filter(b => b.type === 'hut');
+  const COUPLES = 3;
   for (let i = 0; i < CONFIG.START_THRIMPS; i++) {
     const home = huts[Math.floor(i / 2)] || null;
-    const door = home ? home.door : canteen.door;
-    world.thrimps.push(makeThrimp(world, door.x + randRange(-8, 8), door.y + randRange(2, 10), home ? home.id : 0));
+    const door = home ? home.door : canteen.door, couple = Math.floor(i / 2) < COUPLES && home;
+    world.thrimps.push(makeThrimp(world, door.x + randRange(-8, 8), door.y + randRange(2, 10), home ? home.id : 0,
+      couple ? randRange(9, 15) : undefined));
+  }
+  for (let k = 0; k < COUPLES; k++) {
+    const [a, b] = world.thrimps.slice(k * 2, k * 2 + 2);
+    if (!a || !b || !a.home) continue;
+    a.partner = b.id; b.partner = a.id;
+    a.opinions[b.id] = b.opinions[a.id] = Math.round(randRange(65, 80));
+    a.chemistry[b.id] = b.chemistry[a.id] = randRange(0.3, 0.6);
+    for (const [x, y] of [[a, b], [b, a]]) memorize(x, world, `Came here together with ${y.name}`, y.id);
   }
   world.sites = [];
+  world.dead = []; world.graves = []; world.graveyard = null;
   initTrails(world);
   seedTrails(world);
   initWeather(world);

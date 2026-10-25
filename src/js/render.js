@@ -40,7 +40,7 @@ const thrimpPos = (th, alpha) => ({ x: Math.round(lerp(th.px, th.x, alpha)), y: 
 
 function drawThrimp(th, alpha) {
   const { x, y } = thrimpPos(th, alpha);
-  const s = thrimpSprite(th), height = s.ay - (s.top || 0);
+  const s = withHair(thrimpSprite(th), hairOf(th)), height = s.ay - (s.top || 0);
   const bob = th.moving && !thrimpAnims.walk ? (Math.floor(th.stepPhase / 5) & 1) : 0; // placeholder bounce until the walk sheet loads
   const animated = th.working && thrimpAnims[th.working] && thrimpAnims[th.working][th.dir];
   const shake = th.working && !animated ? ((Math.floor(world.time * 3) & 1) ? 1 : -1) : 0; // stand-in where there's no action animation
@@ -87,6 +87,8 @@ function drawSite(s) {
   const unused = Math.max(0, Math.round(s.woodIn - woodNeededFor(s.work)));
   for (let i = 0; i < Math.min(6, unused); i++) blit(sprites.log, s.p.x + s.p.w / 2 + 6, s.p.y - i * 3);
 }
+// A fresh grave is bare earth with flowers; after a few days the grass has grown over it.
+const graveArt = g => art(dayOf(world.time) - g.day >= 4 ? 'grave-old' : 'grave') || art('grave');
 function emoteFor(th) {
   if (th.emote) return th.emote.icon;
   if (th.breaking) return '!';
@@ -94,6 +96,7 @@ function emoteFor(th) {
   if (th.needs.food < 0.12) return 'hungry';
   if (th.needs.rest < 0.1 && !th.asleep) return 'z';
   if (th.asleep && !th.hidden) return 'z';
+  if (th.sick && Math.floor(world.time / 8 + th.id) % 2 === 0) return 'sick';
   if (th.working && th.working !== 'eat' && th.needs.rest < 0.3) return 'sweat';
   if (th.pose === 'sit' && !th.working && th.mood >= 15 && Math.floor(world.time / 6 + th.id) % 3 === 0) return 'note'; // humming
   return null;
@@ -153,6 +156,11 @@ function render(alpha) {
     if (!inView(s.p.x, s.p.y)) continue;
     list.push({ y: s.p.y, draw: () => drawSite(s) });
   }
+  for (const g of world.graves) {
+    if (!inView(g.x, g.y)) continue;
+    const s = graveArt(g);
+    if (s) list.push({ y: g.y, draw: () => blit(s, g.x, g.y) });
+  }
   for (const t of world.tables) {
     if (!inView(t.x, t.y)) continue;
     const s = (t.broken && art('table-broken')) || art('table') || sprites.table;
@@ -176,7 +184,7 @@ function render(alpha) {
     if (th.hidden) continue;
     const p = thrimpPos(th, alpha);
     if (!inView(p.x, p.y)) continue;
-    shadow(p.x, p.y, 5, 1);
+    shadow(p.x, p.y, th.stage === 'child' ? 4 : 5, 1);
     list.push({ y: p.y + 0.5, draw: () => {
       if (th.id === game.selected) ring(p.x, p.y, 8, 3, P.light[1]);
       else if (th.id === game.hovered) ring(p.x, p.y, 8, 3, P.white);

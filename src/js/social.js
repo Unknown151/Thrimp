@@ -5,6 +5,7 @@ const SIGHT = 48;             // px a Thrimp notices others within (and witnesse
 const MEET = 22;              // px close enough for an encounter
 const SOCIAL_COOLDOWN = 20;   // game minutes between one Thrimp's encounters
 const PERCEIVE_EVERY = 3;     // game minutes between looks around
+const COUPLE_AT = 60;         // mutual opinion at which a flirt makes two Thrimps a couple
 
 // Invisible spatial hash (data only): each Thrimp only checks its own and the adjacent buckets.
 const HASH = 64;
@@ -59,7 +60,9 @@ function memorize(th, w, text, about) {
 function relationLabel(a, b) {
   if (a.partner === b.id) return 'Partner';
   const o = opinionOf(a, b);
-  return o >= 50 ? 'Friend' : o >= 20 ? 'Friendly' : o > -20 ? 'Acquaintance' : o > -50 ? 'Dislikes' : 'Rival';
+  const feel = o >= 50 ? 'Friend' : o >= 20 ? 'Friendly' : o > -20 ? 'Acquaintance' : o > -50 ? 'Dislikes' : 'Rival';
+  const fam = familyLabel(a, b);
+  return fam ? (o <= -20 ? `${fam} · ${feel.toLowerCase()}` : fam) : feel;
 }
 const byId = (w, id) => w.thrimps.find(t => t.id === id);
 
@@ -75,7 +78,7 @@ function witness(w, a, b, text, againstA, thought) {
 }
 
 // A Thrimp can be stopped for a kiss or a fight unless they're asleep, indoors, eating, mid-break or already busy.
-const canStop = th => !th.hidden && !th.asleep && !th.breaking && !(th.job && ['sleep', 'eat', 'social', 'break'].includes(th.job.type));
+const canStop = th => !th.dead && !th.hidden && !th.asleep && !th.breaking && !(th.job && ['sleep', 'eat', 'social', 'break'].includes(th.job.type));
 function stopFor(th, w, other, mins, label, working) {
   if (th.job) finishJob(th, w, true);
   const j = job(label, [act(mins, label, {
@@ -98,7 +101,9 @@ const SOCIAL = [
   // A bad mood loosens tongues: a Thrimp in a foul mood snaps at people it merely doesn't like.
   { id: 'insult', when: (a, b, op) => op < (hasTrait(a, 'hotheaded') ? -10 : -30) || (a.mood < -10 && op < 0),
     weight: a => (hasTrait(a, 'hotheaded') ? 3 : 1) * (hasTrait(a, 'spiteful') ? 1.5 : 1) * (a.mood < 0 ? 1.5 : 1), do: insult },
-  { id: 'flirt', when: (a, b, op) => op >= 40 && !a.partner && !b.partner, weight: a => a.mood > 0 ? 1.2 : 0.3, do: flirt },
+  // Romance stays within a generation: adults with adults, elders with elders.
+  { id: 'flirt', when: (a, b, op) => op >= 35 && !a.partner && !b.partner && a.stage !== 'child' && a.stage === b.stage && !isFamily(a, b),
+    weight: a => a.mood > 0 ? 2 : 0.6, do: flirt },
   { id: 'kiss', when: (a, b) => a.partner === b.id && canStop(a) && canStop(b), weight: a => a.mood > 0 ? 3 : 0.5, do: kiss },
   { id: 'fight', when: (a, b, op) => op < -60 && a.mood < -10 && canStop(a) && canStop(b),
     weight: a => hasTrait(a, 'violent') ? 2 : hasTrait(a, 'hotheaded') ? 1 : 0.2, do: (a, b, w) => startFight(a, b, w) },
@@ -164,10 +169,10 @@ function insult(a, b, w) {
 }
 function flirt(a, b, w) {
   emote(a, w, 'heart', 15);
-  if (opinionOf(b, a) >= 40 && !b.partner) {
+  if (opinionOf(b, a) >= 35 && !b.partner) {
     changeOpinion(a, b, 6); changeOpinion(b, a, 6);
     emote(b, w, 'heart', 15);
-    if (opinionOf(a, b) >= 70 && opinionOf(b, a) >= 70) {
+    if (opinionOf(a, b) >= COUPLE_AT && opinionOf(b, a) >= COUPLE_AT) {
       a.partner = b.id; b.partner = a.id;
       for (const [x, y] of [[a, b], [b, a]]) { addThought(x, w, 'new_partner'); memorize(x, w, `Fell in love with ${y.name}`, y.id); remember(x, w, `Became ${y.name}'s partner`); }
       witness(w, a, b, `Saw ${a.name} and ${b.name} become a couple`, 0);
@@ -188,14 +193,18 @@ function kiss(a, b, w) {
     emote(x, w, 'heart', 20);
   }
 }
-// a throws the first punch. Both stop, both are shaken, and everyone nearby remembers who started it.
-function startFight(a, b, w) {
+// a throws the first punch. Both stop, both are shaken and hurt, and everyone nearby remembers who started it.
+// A `lethal` attack (a murderous break) hits hard enough to kill.
+function startFight(a, b, w, lethal = false) {
   meetFirst(a, b); meetFirst(b, a);
   stopFor(a, w, b, 15, `Fighting ${b.name}`, 'fight');
   stopFor(b, w, a, 15, `Fighting ${a.name}`, 'fight');
   a.socialCooldown = b.socialCooldown = w.time + 2 * HOUR; // no friendly nods straight after a brawl
-  const aWins = rand() < (hasTrait(a, 'violent') ? 0.7 : 0.5) - (hasTrait(b, 'violent') ? 0.2 : 0);
+  const aWins = rand() < (hasTrait(a, 'violent') ? 0.7 : 0.5) - (hasTrait(b, 'violent') ? 0.2 : 0) + (lethal ? 0.2 : 0);
   const [winner, loser] = aWins ? [a, b] : [b, a];
+  const blow = (x) => (hasTrait(x, 'violent') ? 1.4 : 1) * (x.stage === 'elder' ? 0.7 : 1);
+  hurt(loser, w, randRange(0.12, 0.3) * blow(winner) * (lethal && winner === a ? 3.5 : 1), winner, 'killed');
+  hurt(winner, w, randRange(0.03, 0.1) * blow(loser), loser, 'killed');
   for (const [x, y] of [[a, b], [b, a]]) {
     changeOpinion(x, y, -20);
     addGrudge(x, y, 2);
@@ -242,6 +251,7 @@ function socialTick(w) {
     for (const b of neighbours(w, a, SIGHT)) {
       meetFirst(a, b);
       if (b.asleep || dist(a.x, a.y, b.x, b.y) > MEET) continue;
+      spreadSickness(a, b, w);
       onEncounter(a, b, w);
       break;
     }
@@ -302,15 +312,27 @@ function nudge(w, th, dx, dy, fx, fy) {
 }
 
 // --- Seeking company, and lashing out ---
+// The single grown-up this Thrimp likes best (25+), if any: someone to court.
+const outAndAbout = (o, th) => o !== th && !o.dead && !o.hidden && !o.asleep;
+function crushOf(th, w) {
+  if (th.partner || th.stage === 'child') return null;
+  return w.thrimps.filter(o => outAndAbout(o, th) && !o.partner && o.stage === th.stage && !isFamily(th, o) && opinionOf(th, o) >= 25)
+    .sort((a, b) => opinionOf(th, b) - opinionOf(th, a))[0] || null;
+}
 function makeSocializeJob(th, w) {
-  // Head for whoever they like best who's out and about; else the canteen tables, where people gather.
-  const friends = w.thrimps.filter(o => o !== th && !o.hidden && !o.asleep && opinionOf(th, o) >= 20)
-    .sort((a, b) => opinionOf(th, b) - opinionOf(th, a));
-  const f = friends[0];
+  // A single grown-up goes courting; anyone else heads for whoever they like best who's out and about; failing
+  // that, the canteen tables, where people gather.
+  const crush = crushOf(th, w);
+  const friends = w.thrimps.filter(o => outAndAbout(o, th) && opinionOf(th, o) >= 20).sort((a, b) => opinionOf(th, b) - opinionOf(th, a));
+  const f = crush || friends[0];
   if (f && dist(f.x, f.y, th.x, th.y) < 500) {
-    return job(`Looking for ${f.name}`, [
+    return job(crush ? `Courting ${f.name}` : `Looking for ${f.name}`, [
       goTo(f.x + randRange(-10, 10), f.y + randRange(6, 12), `Going to see ${f.name}`),
-      act(randRange(20, 40), `Hanging out near ${f.name}`, { each: (t, w2, dt) => { t.needs.social = Math.min(1, t.needs.social + dt / 300); } }),
+      act(randRange(20, 40), `Hanging out near ${f.name}`, {
+        each: (t, w2, dt) => { t.needs.social = Math.min(1, t.needs.social + dt / 300); },
+        // Courting ends in a flirt, if they're still close and both still free. It may not be welcome.
+        finish: t => { if (crush && !t.partner && !f.partner && dist(t.x, t.y, f.x, f.y) < 40 && canStop(f)) doSocial(t, f, w, 'flirt'); },
+      }),
     ]);
   }
   const seat = claimSeat(w, th);
@@ -318,10 +340,23 @@ function makeSocializeJob(th, w) {
   return job('Looking for company', [
     goTo(seat.x, seat.y, 'Heading to the canteen for company'),
     act(randRange(30, 50), 'Sitting with whoever turns up', {
-      begin: t => { t.dir = seat.face; },
+      begin: t => { t.dir = seat.face; t.pose = 'sit'; },
+      end: t => { t.pose = null; },
       each: (t, w2, dt) => { if (w.seats.some(s => s.takenBy && s.takenBy !== t.id)) t.needs.social = Math.min(1, t.needs.social + dt / 200); },
     }),
   ], { cleanup: t => releaseSeat(w, t) });
+}
+// Out for blood: the most hated grown-up (opinion -60 or worse), and a fight meant to kill.
+function makeMurderJob(th, w) {
+  const victim = w.thrimps.filter(o => o !== th && !o.dead && !o.hidden && o.stage !== 'child' && opinionOf(th, o) <= -60
+    && dist(o.x, o.y, th.x, th.y) < 500).sort((a, b) => opinionOf(th, a) - opinionOf(th, b))[0];
+  if (!victim) return null;
+  return job(`Going after ${victim.name}`, [
+    goTo(victim.x, victim.y, `Hunting down ${victim.name}`),
+    act(1, `Attacking ${victim.name}`, {
+      finish: t => { if (dist(t.x, t.y, victim.x, victim.y) < 40 && canStop(victim)) startFight(t, victim, w, true); },
+    }),
+  ]);
 }
 function makeLashOutJob(th, w) {
   const victim = w.thrimps.filter(o => o !== th && !o.hidden && !o.asleep && dist(o.x, o.y, th.x, th.y) < 400)

@@ -16,15 +16,23 @@ const workAllowed = s => Math.min(HUT_WORK, s.woodIn / HUT_WOOD * HUT_WORK);
 // Runs hourly. Who needs a home of their own? Couples living apart, and anyone without a home at all.
 function planBuilding(w) {
   const busy = th => w.sites.some(s => s.owners.includes(th.id));
+  const apart = th => { const p = th.partner && byId(w, th.partner); return p && p.home !== th.home; };
+  // A hut whose people have all died stands empty: the homeless, or a couple living apart, move in before building.
+  for (const hut of w.buildings.filter(b => b.type === 'hut' && !w.thrimps.some(t => t.home === b.id))) {
+    const th = w.thrimps.find(t => t.stage !== 'child' && !busy(t) && (!t.home || apart(t)));
+    if (!th) break;
+    const p = th.partner && byId(w, th.partner);
+    for (const o of p ? [th, p] : [th]) { o.home = hut.id; remember(o, w, `Moved into ${hut.label}`); memorize(o, w, `Moved into ${hut.label}`, 0); }
+  }
   for (const th of w.thrimps) {
     if (w.sites.length >= MAX_SITES) return;
-    if (busy(th)) continue;
+    if (busy(th) || th.stage === 'child') continue;
     const p = th.partner && byId(w, th.partner);
     if (p && th.id > p.id) continue; // a couple is handled once, by its lower id
     if (p && (th.home !== p.home || !th.home)) startSite(w, [th, p], `a home with ${p.name}`);
     else if (!p && !th.home) {
       // Homeless singles share: two of them build one hut together.
-      const mate = w.thrimps.find(o => o !== th && !o.home && !o.partner && !busy(o));
+      const mate = w.thrimps.find(o => o !== th && !o.home && !o.partner && !busy(o) && o.stage !== 'child');
       startSite(w, mate ? [th, mate] : [th], mate ? `a home to share with ${mate.name}` : 'a home of their own');
     }
   }

@@ -56,11 +56,12 @@ function updateUI() {
   const step = th.job && th.job.steps[th.job.i];
   if ($('i-rename').hidden) $('i-name').textContent = th.name;
   else if ($('i-rename').dataset.who !== String(th.id)) finishRename(false); // selection moved on mid-rename
-  $('i-home').textContent = `${home ? 'Lives in ' + home.label : 'Homeless'} · up ${fmtClock(th.schedule.wake * HOUR)} · bed ${fmtClock(th.schedule.bed * HOUR)}`;
+  $('i-home').textContent = `${STAGE_LABEL[th.stage]}, ${ageYears(th, world)} · ${home ? 'lives in ' + home.label : 'homeless'} · up ${fmtClock(th.schedule.wake * HOUR)} · bed ${fmtClock(th.schedule.bed * HOUR)}`;
+  $('i-family').textContent = familyLine(th);
   $('i-doing').textContent = step ? step.label : 'Thinking about what to do';
   $('i-why').textContent = th.job ? th.job.title : '';
-  for (const k of ['food', 'rest', 'fun', 'social']) {
-    const v = th.needs[k], el = $('i-' + k);
+  for (const k of ['food', 'rest', 'fun', 'social', 'health']) {
+    const v = k === 'health' ? th.health : th.needs[k], el = $('i-' + k);
     el.style.width = Math.round(v * 100) + '%';
     el.style.background = barColor(v);
   }
@@ -71,7 +72,9 @@ function updateUI() {
   const state = $('i-state');
   state.className = 'state' + (th.inspiration && !th.breaking ? ' inspired' : '');
   state.textContent = th.breaking ? `Mental break: ${BREAKS[th.breaking.type].label.toLowerCase()}`
-    : th.inspiration ? `Inspired: a work frenzy (${fmtLeft(th.inspiration.until - world.time)} left)` : '';
+    : th.sick ? `Sick with a fever (${fmtLeft(Math.max(1, th.sick.until - world.time))} to go)`
+    : th.inspiration ? `Inspired: a work frenzy (${fmtLeft(th.inspiration.until - world.time)} left)`
+    : th.expecting ? `Expecting a child (due in ${fmtLeft(Math.max(1, th.expecting - world.time))})` : '';
   const traitsEl = $('i-traits');
   if (traitsEl.dataset.who !== String(th.id)) { // traits never change, so only rebuild on a new selection
     traitsEl.dataset.who = th.id;
@@ -131,6 +134,18 @@ function updateUI() {
   $('i-follow').classList.toggle('on', cam.follow);
 }
 
+// "Child of A and B · parent of C, D (died)": the living and the dead, by name.
+function familyLine(th) {
+  const nameOf = id => { const t = byId(world, id); if (t) return t.name; const d = world.dead.find(x => x.id === id); return d ? `${d.name} (died)` : null; };
+  const kids = [...world.thrimps.filter(t => t.parents.includes(th.id)).map(t => t.name),
+    ...world.dead.filter(d => d.parents.includes(th.id)).map(d => `${d.name} (died)`)];
+  const parts = [];
+  const parents = th.parents.map(nameOf).filter(Boolean);
+  if (parents.length) parts.push(`Child of ${parents.join(' and ')}`);
+  if (kids.length) parts.push(`parent of ${kids.join(', ')}`);
+  const s = parts.join(' · ');
+  return s && s[0].toUpperCase() + s.slice(1);
+}
 function thrimpAt(wx, wy) {
   if (!world) return null;
   let best = null;
@@ -163,6 +178,7 @@ function thingAt(wx, wy) {
     else test('building', b.id, b.y, spriteBox(art(b.art) || sprites[b.type], b.x, b.y));
   }
   for (const b of world.bushes) test('bush', b.id, b.y, spriteBox(art('bush-full') || sprites.bush, b.x, b.y));
+  for (const g of world.graves) { const s = graveArt(g); if (s) test('grave', g.id, g.y, spriteBox(s, g.x, g.y)); }
   for (const t of world.trees) {
     const s = t.stump ? (art('stump') || sprites.stump) : (art(t.art) || sprites[t.kind][t.variant]);
     test('tree', t.id, t.y, spriteBox(s, t.x, t.y));
@@ -176,6 +192,7 @@ function findThing(t) {
   if (t.kind === 'site') return world.sites.find(s => s.id === t.id);
   if (t.kind === 'bush') return world.bushes.find(b => b.id === t.id);
   if (t.kind === 'tree') return world.trees.find(x => x.id === t.id);
+  if (t.kind === 'grave') return graveById(world, t.id);
   return null;
 }
 
@@ -227,6 +244,18 @@ function updateThingPanel() {
     rows.push(['Full again', obj.berries >= obj.max ? 'it is full' : `in about ${fmtLeft((obj.max - obj.berries) * regrow)}`]);
     const picker = obj.reservedBy && byId(world, obj.reservedBy);
     if (picker) rows.push(['Being picked by', namesOf([picker])]);
+  } else if (k === 'grave') {
+    const d = world.dead.find(x => x.id === obj.of);
+    title = `Here lies ${obj.name}`;
+    if (d) {
+      rows.push(['Aged', `${Math.floor((d.died - d.born) / DAY * YEARS_PER_DAY)}`]);
+      rows.push(['Died', `day ${dayOf(d.died)}, ${CAUSE_TEXT[d.cause] || d.cause}`]);
+      const killer = d.killer && (byId(world, d.killer) || world.dead.find(x => x.id === d.killer));
+      if (killer) rows.push(['Killed by', byId(world, d.killer) ? namesOf([killer]) : killer.name]);
+      const kin = world.thrimps.filter(t => t.parents.includes(d.id) || d.parents.includes(t.id) || t.parents.some(p => d.parents.includes(p)));
+      if (kin.length) rows.push(['Family left behind', namesOf(kin)]);
+    }
+    rows.push(['Mourning', namesOf(world.thrimps.filter(t => t.mourn.includes(obj.id) || (t.job && t.job.title === `Mourning ${obj.name}`)))]);
   } else if (k === 'tree') {
     title = obj.stump ? 'Tree stump' : obj.kind === 'pine' ? 'Pine' : 'Oak';
     if (obj.stump) rows.push(['Grows back', `in about ${fmtLeft(Math.max(1, obj.regrowAt - world.time))}`]);
@@ -283,10 +312,11 @@ function showToast(text) {
 }
 function processAlerts(now) {
   if (!world.alerts || !world.alerts.length) return;
-  const a = world.alerts.pop(); // the latest one is what's worth seeing
+  // The latest trouble is what's worth seeing; calm news (a birth) only when nothing went wrong.
+  const a = [...world.alerts].reverse().find(x => !x.calm) || world.alerts[world.alerts.length - 1];
   world.alerts.length = 0;
   showToast(a.text);
-  if (!game.jump || now - game.lastJump < JUMP_COOLDOWN_MS) return;
+  if (a.calm || !game.jump || now - game.lastJump < JUMP_COOLDOWN_MS) return;
   game.lastJump = now;
   if (game.speedIndex > 1) setSpeed(1);
   cam.follow = false;

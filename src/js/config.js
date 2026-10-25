@@ -46,6 +46,7 @@ const THRIMP_SHEETS = {
   gather: 'assets/thrimp/gather.png', chop: 'assets/thrimp/chop.png', fight: 'assets/thrimp/fight.png',
   eat: 'assets/thrimp/eat.png', 'sit-eat': 'assets/thrimp/sit-eat.png', sit: 'assets/thrimp/sit.png',
   sleep: 'assets/thrimp/sleep.png', wave: 'assets/thrimp/wave.png', stretch: 'assets/thrimp/stretch.png',
+  'child-walk': 'assets/thrimp/child-walk.png', 'child-idle': 'assets/thrimp/child-idle.png',
 };
 
 // PixelLab object art, one PNG each in assets/objects/. The world is generated after these load, because
@@ -54,7 +55,7 @@ const OBJECT_ART = [
   'hut-a', 'hut-b', 'hut-c', 'canteen', 'table', 'table-broken', 'crate-full', 'crate-empty', 'crate-broken',
   'log', 'chopping-block',
   'oak-1', 'oak-2', 'oak-small', 'pine-1', 'pine-2', 'stump', 'bush-full', 'bush-bare',
-  'rocks', 'flowers', 'reeds', 'basket', 'hut-stage-1', 'hut-stage-2', 'hut-stage-3',
+  'rocks', 'flowers', 'reeds', 'basket', 'hut-stage-1', 'hut-stage-2', 'hut-stage-3', 'grave', 'grave-old',
 ];
 const TREE_ART = { oak: ['oak-1', 'oak-2', 'oak-small'], pine: ['pine-1', 'pine-2'] };
 

@@ -63,28 +63,30 @@ test('PixelLab object art loads and the world uses it', async ({ page }) => {
 test('over three days everyone eats and sleeps, and nobody gets stuck', async ({ page }) => {
   const errors = await open(page);
   const r = await page.evaluate(() => {
+    // The founders (babies born along the way have their own rhythm), and everyone for "stuck" and "starving".
     const w = thrimp.world, did = new Map(w.thrimps.map(t => [t.id, new Set()])), last = new Map();
     let stuck = 0;
     for (let m = 0; m < 3 * 24 * 60; m += 10) {
       thrimp.run(10);
       for (const t of w.thrimps) {
-        if (t.job) did.get(t.id).add(t.job.type);
+        if (t.job && did.has(t.id)) did.get(t.id).add(t.job.type);
         const p = last.get(t.id);
         if (t.moving && p && p[0] === t.x && p[1] === t.y) stuck++; // "walking" but hasn't moved in 10 minutes
         last.set(t.id, [t.x, t.y]);
       }
     }
-    const without = job => w.thrimps.filter(t => !did.get(t.id).has(job)).map(t => t.name);
+    const founders = w.thrimps.filter(t => did.has(t.id));
+    const without = job => founders.filter(t => !did.get(t.id).has(job)).map(t => t.name);
     return {
       neverAte: without('eat'), neverSlept: without('sleep'), stuck,
-      workers: w.thrimps.filter(t => did.get(t.id).has('forage') || did.get(t.id).has('chop')).length,
+      workers: founders.filter(t => did.get(t.id).has('forage') || did.get(t.id).has('chop')).length,
       starving: w.thrimps.filter(t => t.needs.food <= 0).map(t => t.name),
       wood: w.stock.wood,
     };
   });
-  expect(r.neverAte).toEqual([]);
-  expect(r.neverSlept).toEqual([]);
-  expect(r.starving).toEqual([]);
+  expect(r.neverAte, JSON.stringify(r)).toEqual([]);
+  expect(r.neverSlept, JSON.stringify(r)).toEqual([]);
+  expect(r.starving, JSON.stringify(r)).toEqual([]);
   expect(r.stuck).toBe(0);
   expect(r.workers).toBeGreaterThanOrEqual(6);
   expect(r.wood).toBeGreaterThan(0);
@@ -209,7 +211,7 @@ test('a fight hurts both fighters and a bystander remembers it', async ({ page }
 test('two Thrimps in love become partners, and a soured love ends', async ({ page }) => {
   const errors = await open(page);
   const r = await page.evaluate(() => {
-    const w = thrimp.world, [a, b] = w.thrimps;
+    const w = thrimp.world, [a, b] = w.thrimps.filter(t => !t.partner); // founders who came single
     a.opinions[b.id] = 80; b.opinions[a.id] = 80;
     buildSpatialHash(w);
     doSocial(a, b, w, 'flirt');
@@ -320,7 +322,8 @@ test('a saved colony comes back identical and keeps living', async ({ page }) =>
     const look = x => ({
       place: x.placeName, time: x.time, stock: JSON.stringify(x.stock), huts: x.buildings.length, sites: x.sites.length,
       trees: x.trees.map(t => `${t.x},${t.y},${t.stump}`).join(';'), waterT: x.waterT, weather: JSON.stringify(x.weather),
-      thrimps: x.thrimps.map(t => `${t.name}|${t.x.toFixed(2)}|${t.traits}|${JSON.stringify(t.opinions)}|${t.memories.length}|${t.partner}|${t.home}`).join(';'),
+      thrimps: x.thrimps.map(t => `${t.name}|${t.x.toFixed(2)}|${t.traits}|${JSON.stringify(t.opinions)}|${t.memories.length}|${t.partner}|${t.home}|${t.born}|${t.health.toFixed(4)}|${t.hair}|${t.parents}`).join(';'),
+      dead: JSON.stringify(x.dead), graves: JSON.stringify(x.graves),
     });
     const before = look(w);
     // Through gzip and back, as it travels to the Worker.
@@ -543,18 +546,19 @@ test('Thrimps sit to eat at the table, lie down outdoors, and stop to wave to fr
     let eater = null;
     for (let m = 0; m < 2 * DAY && !eater; m += 2) {
       thrimp.run(2);
-      eater = w.thrimps.find(t => t.pose === 'sit' && t.working === 'eat');
+      eater = w.thrimps.find(t => t.pose === 'sit' && t.working === 'eat' && t.stage !== 'child'); // children just stand
     }
     const seated = eater && thrimpSprite(eater) === animFacing('sit-eat', eater.dir)[Math.floor(w.time / CONFIG.ACTION_MIN_PER_FRAME + eater.id * 1.3) % animFacing('sit-eat', eater.dir).length];
-    const sleeper = w.thrimps.find(t => !t.hidden && t !== eater);
+    const grown = w.thrimps.filter(t => t !== eater && t.stage !== 'child');
+    for (const t of grown.slice(0, 3)) { if (t.job) finishJob(t, w, true); t.hidden = false; t.asleep = false; }
+    const sleeper = grown[0];
     if (sleeper.job) finishJob(sleeper, w, true);
     sleeper.gesture = null;
     sleeper.asleep = true;
     const lying = thrimpSprite(sleeper) === animFacing('sleep', sleeper.dir)[0];
     sleeper.asleep = false;
     // Two friends meet: both turn to each other and wave, and a walker stands still until the wave is over.
-    const [a, b] = w.thrimps.filter(t => !t.hidden && t !== eater && t !== sleeper && !t.asleep);
-    for (const t of [a, b]) if (t.job) finishJob(t, w, true);
+    const [a, b] = grown.slice(1, 3);
     a.x = a.px = w.canteen.door.x - 40; a.y = a.py = w.canteen.door.y + 40; b.x = b.px = a.x + 16; b.y = b.py = a.y;
     a.opinions[b.id] = 50; b.opinions[a.id] = 50;
     startJob(a, w, job('Test walk', [goTo(a.x - 60, a.y + 30, 'Walking')]), 'wander');
@@ -585,6 +589,103 @@ test('every kind of weather, day and night, draws without errors', async ({ page
   const state = await page.evaluate(() => ({ drops: amb.drops.length, flies: amb.fireflies.length }));
   expect(state.drops).toBeGreaterThan(0);   // last stop: rain at night
   expect(state.flies).toBe(0);              // and no fireflies in the rain
+  expect(errors).toEqual([]);
+});
+
+// The life checks run hourly, so these tests move time on by a little over an hour (HOUR + 1) after a change.
+test('Thrimps grow old: an elder slows down and goes grey', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, t = w.thrimps[0];
+    t.born = w.time - 31 * DAY;
+    thrimp.select(t.id);
+    thrimp.run(HOUR + 1);
+    return { stage: t.stage, hair: hairOf(t), pace: paceOf(t), years: ageYears(t, w) };
+  });
+  expect(r.stage).toBe('elder');
+  expect(r.hair).toBe('grey');
+  expect(r.pace).toBeLessThan(1);
+  await expect(page.locator('#i-home')).toContainText(`Elder, ${r.years}`);
+  await expect(page.locator('#i-thoughts')).toContainText('Old bones');
+  expect(errors).toEqual([]);
+});
+
+test('a settled couple has a child who takes after them, and grows up', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, [a, b] = w.thrimps.filter(t => t.home);
+    a.partner = b.id; b.partner = a.id; b.home = a.home;
+    a.opinions[b.id] = b.opinions[a.id] = 80;
+    w.stock.food = 200;
+    a.expecting = b.expecting = w.time + 1;
+    thrimp.run(HOUR + 1);
+    const child = w.thrimps.find(t => t.parents.includes(a.id) && t.parents.includes(b.id));
+    if (!child) return { born: false };
+    const out = { born: true, home: child.home === a.home, stage: child.stage, love: child.opinions[a.id] >= 30 && a.opinions[child.id] >= 30,
+      proud: a.thoughts.some(t => t.id === 'new_child') && b.thoughts.some(t => t.id === 'new_child'), label: relationLabel(a, child) };
+    child.born = w.time - (CHILD_DAYS + 0.1) * DAY;
+    thrimp.run(HOUR + 1);
+    return { ...out, grown: child.stage, grewUp: child.thoughts.some(t => t.id === 'grew_up') };
+  });
+  expect(r).toEqual({ born: true, home: true, stage: 'child', love: true, proud: true, label: 'Child', grown: 'adult', grewUp: true });
+  expect(errors).toEqual([]);
+});
+
+test('old age takes a Thrimp, who is buried and mourned', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, [a, b] = w.thrimps;
+    a.partner = b.id; b.partner = a.id; a.opinions[b.id] = b.opinions[a.id] = 80;
+    a.born = w.time - (a.lifespan + 0.6) * DAY;
+    thrimp.run(HOUR + 1);
+    const gone = !w.thrimps.includes(a), d = w.dead.find(x => x.id === a.id), grave = d && graveById(w, d.grave);
+    const widowed = b.partner === 0 && b.thoughts.some(t => t.id === 'lost_partner') && grave && b.mourn.includes(grave.id);
+    for (let m = 0; m < 2 * DAY && !b.thoughts.some(t => t.id === 'paid_respects'); m += 10) thrimp.run(10);
+    return { gone, cause: d && d.cause, grave: !!grave, widowed: !!widowed, respects: b.thoughts.some(t => t.id === 'paid_respects'), dead: w.stats.deaths };
+  });
+  expect(r).toEqual({ gone: true, cause: 'old age', grave: true, widowed: true, respects: true, dead: 1 });
+  expect(errors).toEqual([]);
+});
+
+test('a fever weakens, keeps them in bed, spreads, and passes', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    thrimp.run(4 * HOUR);
+    const [a, b] = w.thrimps.filter(t => t.home && !t.hidden);
+    fallSick(a, w);
+    a.sick.severity = 0.3; a.sick.until = w.time + DAY;
+    for (let i = 0; i < 200 && !b.sick; i++) spreadSickness(a, b, w);
+    thrimp.run(3 * HOUR);
+    const weaker = a.health < 1, inBed = !!(a.job && a.job.type === 'sleep');
+    thrimp.run(DAY);
+    return { spread: !!b.sick || b.immuneUntil > 0, weaker, inBed, over: !a.sick && a.immuneUntil > w.time, recovered: a.thoughts.some(t => t.id === 'recovered') };
+  });
+  expect(r).toEqual({ spread: true, weaker: true, inBed: true, over: true, recovered: true });
+  expect(errors).toEqual([]);
+});
+
+test('a violent Thrimp at breaking point can kill, and the colony turns on the killer', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    thrimp.run(4 * HOUR);
+    const [a, b, c] = w.thrimps.filter(t => !t.hidden && !t.asleep);
+    a.traits = ['violent']; b.traits = b.traits.filter(t => t !== 'violent');
+    a.opinions[b.id] = -90; c.opinions[b.id] = 60;
+    b.x = b.px = a.x + 30; b.y = b.py = a.y; // the murderer only goes after someone within reach
+    const went = startBreak(a, w, 'murder');
+    for (let i = 0; i < 8 && w.thrimps.includes(b); i++) {
+      a.socialCooldown = b.socialCooldown = 0;
+      b.x = b.px = a.x + 12; b.y = b.py = a.y;
+      startFight(a, b, w, true);
+      thrimp.run(1);
+    }
+    const d = w.dead.find(x => x.id === b.id);
+    return { went, killed: !!d && d.cause === 'killed' && d.killer === a.id, blamed: opinionOf(c, a) <= -40,
+      guilt: a.thoughts.some(t => t.id === 'killed_violent') };
+  });
+  expect(r).toEqual({ went: true, killed: true, blamed: true, guilt: true });
   expect(errors).toEqual([]);
 });
 
