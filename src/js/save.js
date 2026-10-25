@@ -28,6 +28,7 @@ function serializeWorld(w) {
     seats: w.seats.map(s => ({ x: s.x, y: s.y, face: s.face, table: w.tables.indexOf(s.table) })),
     crate: { ...w.crate, repairBy: 0 }, store: w.store,
     shoreSpots: w.shoreSpots, noBuild: w.noBuild, dirtSpots: w.dirtSpots, sites: w.sites,
+    dead: w.dead, graves: w.graves, graveyard: w.graveyard, lastOutbreak: w.lastOutbreak,
     thrimps: w.thrimps.map(th => {
       const { job, route, ...rest } = th;
       return { ...rest, moving: false, working: false, hidden: false, asleep: false, breaking: null, emote: null, trailCell: -1,
@@ -44,7 +45,10 @@ function restoreWorld(d) {
     nextId: d.nextId, stock: d.stock, stats: d.stats || {},
     buildings: d.buildings, trees: d.trees, bushes: d.bushes, tables: d.tables, crate: d.crate, store: d.store,
     shoreSpots: d.shoreSpots, noBuild: d.noBuild, dirtSpots: d.dirtSpots, sites: d.sites || [], thrimps: d.thrimps,
+    // Saves from before the life cycle have no dead, no graves and no ages: those start fresh (ensureLife).
+    dead: d.dead || [], graves: d.graves || [], graveyard: d.graveyard || null, lastOutbreak: d.lastOutbreak,
   };
+  for (const th of w.thrimps) ensureLife(th, w);
   buildTerrain(w);
   if (d.weather) w.weather = d.weather; else initWeather(w); // saves from before the weather simply start clear
   w.byId = new Map(w.buildings.map(b => [b.id, b]));

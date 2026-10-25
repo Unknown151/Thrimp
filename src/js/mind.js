@@ -27,7 +27,7 @@ const TRAIT_EFFECTS = {
   shy:            ['Needs company less', 'Starts fewer conversations', 'Hates eating at a crowded table (-5)', 'Slinks off humiliated when insulted (-4)', 'Likelier to sulk when breaking down', 'Clashes with hotheads'],
   hotheaded:      ['Breaks down sooner (at -24 instead of -32)', 'Insults people they merely dislike', 'Swings back when insulted by someone they hate', 'Picks fights more often', 'Likelier to smash things when breaking down', 'Rubs most people the wrong way'],
   spiteful:       ['Every grudge counts double', 'Bad turns hurt their opinion 50% more', 'Never forgives: bad opinions don\'t fade', 'Insults more readily', 'Rubs most people the wrong way', 'Clashes with the cunning'],
-  violent:        ['Far likelier to start a fight, and to win it', 'Enjoys winning a fight (+3)', 'May lash out at someone when breaking down', 'Likelier to smash things when breaking down'],
+  violent:        ['Far likelier to start a fight, and to win it', 'Hits harder', 'Enjoys winning a fight (+3)', 'May lash out at someone when breaking down', 'At breaking point, may go after their worst enemy to kill', 'Likelier to smash things when breaking down'],
   cunning:        ['Flatters people freely', 'Their insults sting half as much', 'Clashes with the spiteful'],
   cheerful:       ['Mood +8', 'Conversations go a little better', 'Clashes with the gloomy'],
   gloomy:         ['Mood -8', 'Conversations go a little worse', 'Likelier to sulk when breaking down', 'Clashes with the cheerful'],
@@ -84,7 +84,25 @@ const THOUGHTS = {
   won_fight:      { label: 'Won a fight', mood: 3, mins: 12 * HOUR },
   saw_fight:      { label: 'Saw a fight', mood: -3, mins: 8 * HOUR },
   heartbroken:    { label: 'Heartbroken', mood: -15, mins: 3 * DAY },
+  // Life and death (life.js)
+  grew_up:        { label: 'All grown up', mood: 6, mins: 2 * DAY },
+  expecting:      { label: 'Expecting a child', mood: 6, mins: 2 * DAY },
+  new_child:      { label: 'Had a child', mood: 12, mins: 3 * DAY },
+  new_sibling:    { label: 'Got a little brother or sister', mood: 3, mins: DAY },
+  recovered:      { label: 'Over the fever', mood: 4, mins: DAY },
+  lost_partner:   { label: 'Lost my partner', mood: -25, mins: 6 * DAY },
+  lost_family:    { label: 'Lost family', mood: -18, mins: 5 * DAY },
+  lost_friend:    { label: 'Lost a friend', mood: -10, mins: 3 * DAY },
+  enemy_died:     { label: 'Someone I hated is dead', mood: 4, mins: DAY },
+  saw_death:      { label: 'Saw someone die', mood: -12, mins: 2 * DAY },
+  paid_respects:  { label: 'Said goodbye at the grave', mood: 4, mins: DAY },
+  visited_grave:  { label: 'Sat by a loved one\'s grave', mood: 2, mins: 8 * HOUR },
+  took_a_life:    { label: 'Killed someone', mood: -18, mins: 5 * DAY },
+  killed_violent: { label: 'Killed someone', mood: -4, mins: 2 * DAY },
   // Conditions: recomputed every refresh while they hold, so they last only as long as the cause.
+  sick:           { label: 'Sick with a fever', mood: -8 },
+  hurt:           { label: 'In pain', mood: -6 },
+  frail:          { label: 'Old bones', mood: -2 },
   hungry:         { label: 'Hungry', mood: -6 },
   starving:       { label: 'Starving', mood: -18 },
   tired:          { label: 'Tired', mood: -5 },
@@ -123,6 +141,9 @@ function conditionThoughts(th, w) {
   if (n.social < 0.2) out.push('lonely');
   if (th.partner) out.push('in_love');
   if (!th.home) out.push('homeless');
+  if (th.sick) out.push('sick');
+  if (th.health < 0.5) out.push('hurt');
+  if (th.stage === 'elder') out.push('frail');
   if (hasTrait(th, 'greedy') && w.stock.food < w.thrimps.length) out.push('stores_low');
   if (w.tables.some(t => t.broken)) out.push('broken_table');
   if (w.crate.broken) out.push('broken_crate');
@@ -135,6 +156,7 @@ function refreshMind(th, w) {
   refreshRelations(th, w);
   for (const id of conditionThoughts(th, w)) th.thoughts.push({ id, mood: THOUGHTS[id].mood, until: w.time + MIND_EVERY + 1 });
   weatherThoughts(th, w);
+  checkHealth(th, w);
   th.mood = moodOf(th, w);
   if (th.inspiration && th.inspiration.until <= w.time) { th.inspiration = null; remember(th, w, 'The inspiration faded'); }
 
@@ -165,6 +187,8 @@ const BREAKS = {
   sulk:   { label: 'Sulking alone', weight: th => hasTrait(th, 'shy') || hasTrait(th, 'gloomy') ? 3 : 1, make: makeSulkJob },
   smash:  { label: 'Smashing things', weight: th => 0.4 + (hasTrait(th, 'hotheaded') ? 2.5 : 0) + (hasTrait(th, 'violent') ? 2.5 : 0), make: makeSmashJob },
   lashout: { label: 'Lashing out', weight: th => (hasTrait(th, 'violent') ? 3 : 0.1) + (hasTrait(th, 'hotheaded') ? 1 : 0), make: makeLashOutJob },
+  // The worst of it: a violent Thrimp at breaking point goes after the one they hate most, to kill.
+  murder: { label: 'Out for blood', weight: th => hasTrait(th, 'violent') && th.stage !== 'child' ? 0.6 : 0, make: makeMurderJob },
 };
 function startBreak(th, w, type) {
   const options = Object.keys(BREAKS).map(k => ({ k, j: null }));

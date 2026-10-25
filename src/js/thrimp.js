@@ -1,10 +1,12 @@
 // ============================================================
 // THRIMP: needs, schedule, memory of recent activity
 // ============================================================
-function makeThrimp(world, x, y, homeId) {
+// A new Thrimp. Starting colonists are adults of any age; children are made at age 0 by giveBirth (life.js).
+function makeThrimp(world, x, y, homeId, ageInDays = randRange(8.5, 22)) {
   const traits = pickTraits();
   const shift = traits.reduce((s, t) => s + (TRAITS[t].schedule || 0), 0); // early risers and night owls
   return {
+    ...lifeFields(world, ageInDays),
     id: world.nextId++, name: makeName(world.names),
     x, y, px: x, py: y,
     dir: 'south', moving: false, working: false, hidden: false, asleep: false, stepPhase: 0,
@@ -28,7 +30,7 @@ const WORK_JOBS = new Set(['forage', 'chop', 'haul']);
 function updateNeeds(th, dt) {
   const n = th.needs;
   n.food -= dt / (th.asleep ? 2200 : 1100);
-  if (!th.asleep) n.rest -= dt / 1300 * (th.job && WORK_JOBS.has(th.job.type) ? 1.15 : 1);
+  if (!th.asleep) n.rest -= dt / 1300 * (th.job && WORK_JOBS.has(th.job.type) ? 1.15 : 1) * (th.stage === 'elder' || th.sick ? 1.3 : 1);
   if (!th.asleep) n.fun -= dt / 1500;
   if (!th.asleep) n.social -= dt / (hasTrait(th, 'shy') ? 2600 : 1400); // the shy need company less
   n.food = clamp(n.food, 0, 1); n.rest = clamp(n.rest, 0, 1); n.fun = clamp(n.fun, 0, 1); n.social = clamp(n.social, 0, 1);
@@ -42,10 +44,10 @@ function remember(th, world, text) {
 function emote(th, world, icon, mins = 20) { th.emote = { icon, until: world.time + mins }; }
 // A short bit of body language ('wave', 'stretch'). A walker stops for it (followRoute waits). Looks only: not saved.
 function gesture(th, world, anim, mins = 3) { th.gesture = { anim, start: world.time, until: world.time + mins }; }
-// Something the player would want to see (a fight, a breakdown...). The UI shows it and may slow time and pan over
-// (ui.js); the simulation never waits for it. Not saved.
-function raiseAlert(w, text, x, y, who = []) {
+// Something the player would want to see (a fight, a breakdown, a death...). The UI shows it and may slow time and pan
+// over (ui.js); `calm` news (a birth, someone growing up) is only shown. The simulation never waits for it. Not saved.
+function raiseAlert(w, text, x, y, who = [], calm = false) {
   if (!w.alerts) w.alerts = [];
-  w.alerts.push({ text, x, y, who, time: w.time });
+  w.alerts.push({ text, x, y, who, time: w.time, calm });
   if (w.alerts.length > 10) w.alerts.shift();
 }

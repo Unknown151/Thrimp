@@ -32,8 +32,12 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
   trees, warm dusk light); expressive Thrimps (eating, sitting at the table, lying in the grass, curling up to sleep
   outdoors, waving to friends, stretching on waking, looking around, new emotes). Later: sound, seasons, more
   critters, Thrimp variants
-- [ ] 5. **Narrator + chronicle:** tension director, first ~10 events, chronicle UI
-- [ ] 6. **Life cycle:** births, aging, death, marriages, family, inheritance of grudges
+- [ ] 5. **Narrator + chronicle:** tension director, first ~10 events, chronicle UI. Skipped for now (Rasmus,
+  2026-10-25): first more things to watch happen on their own, then the parts where he steps in
+- [x] 6. **Life cycle:** ages (about 40 days), children who play and grow up, elders who slow down and go grey,
+  health, fevers that spread, deaths by age, hunger, fever and violence (murderous breaks), grief, graves and
+  mourning, families with inherited traits, hair and grudges, courting. Later: marriages as ceremonies, funerals as
+  gatherings, a family tree view, orphans taken in by relatives
 - [ ] 7. **Resources & pressure:** depletion, invention, relocation and splitting
 - [ ] 8. **God powers:** influence, good / bad / neutral powers, the colony's opinion of the player
 - [ ] 9. **Claude voice:** diaries, prayers, chronicle chapters, myths

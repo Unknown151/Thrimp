@@ -151,6 +151,7 @@ const EMOTE_ICONS = {
   idea: ['.###.', '#...#', '#...#', '.###.', '..#..'],
   sweat: ['..#..', '..#..', '.###.', '.###.', '..#..'],
   rain: ['.###.', '#####', '.....', '#.#.#', '.#.#.'],
+  sick: ['..#..', '.#.#.', '.#.#.', '.###.', '.###.'],
 };
 function drawEmote(P, rows, color) {
   const c = makeCanvas(11, 11), g = c.getContext('2d');
@@ -190,6 +191,7 @@ function buildSprites(P) {
       idea: drawEmote(P, EMOTE_ICONS.idea, P.light[1]),
       sweat: drawEmote(P, EMOTE_ICONS.sweat, P.water[1]),
       rain: drawEmote(P, EMOTE_ICONS.rain, P.water[0]),
+      sick: drawEmote(P, EMOTE_ICONS.sick, P.berry[0]),
     },
     placeholder: { front: drawPlaceholderThrimp(P, false), back: drawPlaceholderThrimp(P, true) },
   };
@@ -254,6 +256,44 @@ function loadThrimpSheet(name, src) {
   };
   img.src = src;
 }
+// Hair colour is painted in code, so one set of art covers every family, and every elder goes grey. The art's hair
+// highlights are #262b44 (used nowhere else); its dark hair shares #181425 with the outline, so only dark pixels that
+// touch a highlight and aren't on the sprite's edge count as hair.
+const HAIR = {
+  black: null, brown: ['#b86f50', '#733e39'], ginger: ['#d77643', '#be4a2f'], blond: ['#fee761', '#feae34'],
+  plum: ['#b55088', '#68386c'], grey: ['#c0cbdc', '#8b9bb4'],
+};
+const hairCache = new WeakMap(); // frame sprite -> { colour: recoloured sprite }
+function withHair(s, hair) {
+  const cols = HAIR[hair];
+  if (!cols || !s) return s;
+  let m = hairCache.get(s);
+  if (!m) hairCache.set(s, m = {});
+  return m[hair] || (m[hair] = recolorHair(s, cols));
+}
+function recolorHair(s, [hi, base]) {
+  try {
+    const W = s.img.width, H = s.img.height, c = makeCanvas(W, H), g = c.getContext('2d');
+    g.drawImage(s.img, 0, 0);
+    const img = g.getImageData(0, 0, W, H), d = img.data, src = new Uint8ClampedArray(d);
+    const is = (x, y, r, gg, b) => x >= 0 && y >= 0 && x < W && y < H && src[(y * W + x) * 4 + 3] >= 128
+      && src[(y * W + x) * 4] === r && src[(y * W + x) * 4 + 1] === gg && src[(y * W + x) * 4 + 2] === b;
+    const empty = (x, y) => x < 0 || y < 0 || x >= W || y >= H || src[(y * W + x) * 4 + 3] < 128;
+    const HI = hexRgb(hi), BASE = hexRgb(base);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const o = (y * W + x) * 4;
+      let to = null;
+      if (is(x, y, 0x26, 0x2b, 0x44)) to = HI;
+      else if (is(x, y, 0x18, 0x14, 0x25) && !empty(x - 1, y) && !empty(x + 1, y) && !empty(x, y - 1) && !empty(x, y + 1)) {
+        for (let dy = -1; dy <= 1 && !to; dy++) for (let dx = -1; dx <= 1 && !to; dx++) if (is(x + dx, y + dy, 0x26, 0x2b, 0x44)) to = BASE;
+      }
+      if (to) { d[o] = to[0]; d[o + 1] = to[1]; d[o + 2] = to[2]; }
+    }
+    g.putImageData(img, 0, 0);
+    return { ...s, img: c };
+  } catch (e) { return s; } // a tainted canvas (opened from file://): keep the original look
+}
+const hairOf = th => th.stage === 'elder' ? 'grey' : th.hair;
 // Frames for an animation facing `dir`, or the nearest side it was made for: gestures and seated eating exist only
 // facing south, east, north and west, so a Thrimp facing south-east uses the east frames.
 function animFacing(name, dir) {
@@ -262,6 +302,13 @@ function animFacing(name, dir) {
   return a[dir] || a[dir.split('-')[1]] || a[dir.split('-')[0]] || null;
 }
 function thrimpSprite(th) {
+  // Children have their own small sprite: walking, or standing (they don't sit at tables or work).
+  if (th.stage === 'child' && thrimpAnims['child-idle']) {
+    const cw = th.moving && animFacing('child-walk', th.dir);
+    if (cw) return cw[Math.floor(th.stepPhase / CONFIG.WALK_PX_PER_FRAME) % cw.length];
+    const ci = animFacing('child-idle', th.dir);
+    if (ci) return ci[Math.floor(world.time / CONFIG.IDLE_MIN_PER_FRAME + th.id * 1.7) % ci.length];
+  }
   const walk = th.moving && thrimpAnims.walk && thrimpAnims.walk[th.dir];
   if (walk) return walk[Math.floor(th.stepPhase / CONFIG.WALK_PX_PER_FRAME) % walk.length];
   const gesture = th.gesture && animFacing(th.gesture.anim, th.dir);
