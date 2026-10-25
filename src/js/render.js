@@ -45,7 +45,7 @@ function drawThrimp(th, alpha) {
   const animated = th.working && thrimpAnims[th.working] && thrimpAnims[th.working][th.dir];
   const shake = th.working && !animated ? ((Math.floor(world.time * 3) & 1) ? 1 : -1) : 0; // stand-in where there's no action animation
   ctx.drawImage(s.img, x - s.ax + shake, y - s.ay - bob);
-  if (th.carrying) {
+  if (th.carrying && th.pose !== 'sleep' && !th.asleep) { // lying down, the load rests beside them unseen
     if (th.carrying.kind === 'food') {
       const hx = x + (th.dir.includes('west') ? -6 : 3), hy = y - Math.round(height * 0.38) - bob;
       const basket = art('basket');
@@ -94,6 +94,8 @@ function emoteFor(th) {
   if (th.needs.food < 0.12) return 'hungry';
   if (th.needs.rest < 0.1 && !th.asleep) return 'z';
   if (th.asleep && !th.hidden) return 'z';
+  if (th.working && th.working !== 'eat' && th.needs.rest < 0.3) return 'sweat';
+  if (th.pose === 'sit' && !th.working && th.mood >= 15 && Math.floor(world.time / 6 + th.id) % 3 === 0) return 'note'; // humming
   return null;
 }
 
@@ -108,6 +110,7 @@ function render(alpha) {
   ctx.drawImage(world.ground, 0, 0);
   paintTrails(world);
   ctx.drawImage(world.trailCanvas, 0, 0);
+  drawAmbienceGround();
 
   const hw = viewW / 2 / cam.zoom, hh = viewH / 2 / cam.zoom;
   const vx0 = cam.x - hw - 48, vx1 = cam.x + hw + 48, vy0 = cam.y - hh - 16, vy1 = cam.y + hh + 64;
@@ -120,7 +123,7 @@ function render(alpha) {
     if (tr.stump) { const s = art('stump') || sprites.stump; list.push({ y: tr.y, draw: () => blit(s, tr.x, tr.y) }); continue; }
     const s = art(tr.art) || sprites[tr.kind][tr.variant];
     shadow(tr.x, tr.y, Math.max(8, Math.round((s.width || 16) * 0.3)), 2);
-    list.push({ y: tr.y, draw: () => blit(s, tr.x, tr.y) });
+    list.push({ y: tr.y, draw: () => drawSwaying(s, tr.x, tr.y, tr.x * 0.07) });
   }
   for (const b of world.bushes) {
     if (!inView(b.x, b.y)) continue;
@@ -180,6 +183,7 @@ function render(alpha) {
       drawThrimp(th, alpha);
     } });
   }
+  addAmbienceSprites(list, inView);
   list.sort((a, b) => a.y - b.y);
   for (const it of list) it.draw();
 
@@ -196,7 +200,9 @@ function render(alpha) {
     blit(sprites.emotes.z, b.x + 10, b.y - (s.ay - (s.top || 0)) - 2 + Math.round(Math.sin(world.time / 6) * 1.5));
   }
 
+  drawAmbienceAir(z, tx, ty);
   drawNight(z, tx, ty);
+  drawAmbienceNight();
   if (game.debug) drawDebug();
   drawLabels(alpha);
 }

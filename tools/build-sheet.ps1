@@ -68,21 +68,24 @@ $rows = foreach ($d in $dirs) {
 $first = $rows | Where-Object { $_.Count } | Select-Object -First 1
 if (-not $first) { throw "No frames found in $Frames" }
 $cols = ($rows | ForEach-Object { $_.Count } | Measure-Object -Maximum).Maximum
-$probe = [System.Drawing.Bitmap]::FromFile($first[0]); $size = $probe.Width; $probe.Dispose()
+# Custom (v3) animations come back on canvases sized per direction (40 px south, 44 px east...). The cell is the
+# largest of them; smaller frames are centred in it. The game finds each direction's feet from the pixels anyway.
+$size = 0
+foreach ($row in $rows) { foreach ($f in $row) { $probe = [System.Drawing.Bitmap]::FromFile($f); $size = [Math]::Max($size, [Math]::Max($probe.Width, $probe.Height)); $probe.Dispose() } }
 
 $sheet = New-Object System.Drawing.Bitmap ($size * $cols), ($size * $dirs.Count), ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $snapped = 0
 for ($r = 0; $r -lt $dirs.Count; $r++) {
   for ($c = 0; $c -lt $rows[$r].Count; $c++) {
     $img = [System.Drawing.Bitmap]::FromFile($rows[$r][$c])
-    if ($img.Width -ne $size -or $img.Height -ne $size) { throw "$($rows[$r][$c]) is $($img.Width)x$($img.Height), expected ${size}x$size" }
-    for ($y = 0; $y -lt $size; $y++) {
-      for ($x = 0; $x -lt $size; $x++) {
+    $ox = [Math]::Floor(($size - $img.Width) / 2); $oy = [Math]::Floor(($size - $img.Height) / 2)
+    for ($y = 0; $y -lt $img.Height; $y++) {
+      for ($x = 0; $x -lt $img.Width; $x++) {
         $px = $img.GetPixel($x, $y)
         if ($px.A -lt 128) { continue } # crisp edges: no half-transparent pixels
         $col = Snap $px
         if ($col.ToArgb() -ne $px.ToArgb()) { $snapped++ }
-        $sheet.SetPixel($c * $size + $x, $r * $size + $y, $col)
+        $sheet.SetPixel($c * $size + $ox + $x, $r * $size + $oy + $y, $col)
       }
     }
     $img.Dispose()

@@ -19,7 +19,7 @@ function serializeWorld(w) {
   return {
     v: SAVE_VERSION,
     seed: w.seed, terrainSeed: w.terrainSeed, center: w.center,
-    time: w.time, tick: w.tick, placeName: w.placeName, nextId: w.nextId, stock: w.stock, stats: w.stats,
+    time: w.time, tick: w.tick, placeName: w.placeName, nextId: w.nextId, stock: w.stock, stats: w.stats, weather: w.weather,
     buildings: w.buildings.map(b => ({ ...b, sleepers: [] })),
     canteen: w.canteen.id, lumberyard: w.lumberyard ? w.lumberyard.id : 0,
     trees: w.trees.map(t => ({ ...t, reservedBy: 0 })),
@@ -30,7 +30,8 @@ function serializeWorld(w) {
     shoreSpots: w.shoreSpots, noBuild: w.noBuild, dirtSpots: w.dirtSpots, sites: w.sites,
     thrimps: w.thrimps.map(th => {
       const { job, route, ...rest } = th;
-      return { ...rest, moving: false, working: false, hidden: false, asleep: false, breaking: null, emote: null, trailCell: -1 };
+      return { ...rest, moving: false, working: false, hidden: false, asleep: false, breaking: null, emote: null, trailCell: -1,
+        pose: null, gesture: null };
     }),
     trailIdx, trailVal,
   };
@@ -45,6 +46,7 @@ function restoreWorld(d) {
     shoreSpots: d.shoreSpots, noBuild: d.noBuild, dirtSpots: d.dirtSpots, sites: d.sites || [], thrimps: d.thrimps,
   };
   buildTerrain(w);
+  if (d.weather) w.weather = d.weather; else initWeather(w); // saves from before the weather simply start clear
   w.byId = new Map(w.buildings.map(b => [b.id, b]));
   w.names = new Set(w.thrimps.map(t => t.name));
   w.canteen = w.byId.get(d.canteen);

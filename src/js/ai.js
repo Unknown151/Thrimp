@@ -30,6 +30,7 @@ const job = (title, steps, extra = {}) => ({ title, steps, i: 0, started: false,
 function followRoute(th, w) {
   const r = th.route;
   if (!r || !r.length) { th.moving = false; return true; }
+  if (th.gesture) { th.moving = false; return false; } // stopped to wave; walks on when it's done
   let budget = th.speed * CONFIG.MIN_PER_TICK;
   if (th.needs.rest < 0.2) budget *= 0.8;
   if (th.needs.food < 0.1) budget *= 0.85;
@@ -76,6 +77,8 @@ const releaseIfMine = (thing, th) => { if (thing && thing.reservedBy === th.id) 
 function makeEatJob(th, w) {
   if (th.carrying && th.carrying.kind === 'food') {
     return job('Snacking on berries', [act(12, 'Eating berries', {
+      begin: t => { t.working = 'eat'; },
+      end: t => { t.working = false; },
       finish: t => {
         const n = Math.min(2, t.carrying.amount);
         eat(t, 0.25 * n);
@@ -95,7 +98,10 @@ function makeEatJob(th, w) {
           t.portions = hasTrait(t, 'greedy') && w.stock.food >= 2 ? 2 : 1;
           w.stock.food -= t.portions;
           t.dir = seat ? seat.face : 'north';
+          t.working = 'eat';
+          if (seat) t.pose = 'sit';
         },
+        end: t => { t.working = false; t.pose = null; },
         finish: t => {
           eat(t, t.portions === 2 ? 0.9 : 0.65);
           addThought(t, w, t.portions === 2 ? 'big_meal' : 'ate_meal');
@@ -112,7 +118,7 @@ function makeEatJob(th, w) {
   return job('Looking for something to eat', [
     goTo(bush.ix, bush.iy, 'Walking to a berry bush'),
     act(15, 'Eating wild berries', {
-      begin: t => { if (bush.berries < 1) return 'fail'; t.dir = 'north'; t.working = 'gather'; },
+      begin: t => { if (bush.berries < 1) return 'fail'; t.dir = 'north'; t.working = 'eat'; },
       finish: t => { const n = Math.min(2, Math.floor(bush.berries)); bush.berries -= n; eat(t, 0.2 * n); addThought(t, w, 'ate_raw'); },
       end: t => { t.working = false; },
     }),
@@ -149,6 +155,7 @@ function sleepStep(w, home) {
         t.y = t.py = home.door.y + 2;
         t.dir = 'south';
       }
+      if (t.sleptFor > 3 * HOUR) gesture(t, w, 'stretch', 4); // up, and a good stretch
     },
   };
 }
@@ -221,18 +228,20 @@ function makeHaulJob(th, w) {
 }
 
 function makeRelaxJob(th, w) {
-  const options = [];
-  if (w.shoreSpots.length) options.push({ weight: 2, where: 'by the water', spot: pick(w.shoreSpots) });
+  const options = [], wet = isRaining(w) ? 0.15 : 1; // nobody lounges by the lake in the rain
+  if (w.shoreSpots.length) options.push({ weight: 2 * wet, where: 'by the water', spot: pick(w.shoreSpots) });
   if (freeSeats(w).length) options.push({ weight: hasTrait(th, 'shy') ? 0.4 : 1.5, where: 'at the canteen', seat: true });
   const n = pick(nearbyMainNodes(w, th.x, th.y, 260));
-  if (n) options.push({ weight: 1, where: 'in the grass', spot: { x: n.x + randRange(-10, 10), y: n.y + randRange(-10, 10), face: pick(DIRS) } });
+  if (n) options.push({ weight: wet, where: 'in the grass', spot: { x: n.x + randRange(-10, 10), y: n.y + randRange(-10, 10), face: pick(DIRS) } });
   const o = weightedPick(options, o => o.weight);
   if (!o) return null;
   const spot = o.seat ? claimSeat(w, th) : o.spot;
   return job('Taking it easy', [
     goTo(spot.x, spot.y, `Strolling to a spot ${o.where}`),
     act(randRange(30, 70), `Relaxing ${o.where}`, {
-      begin: t => { t.dir = spot.face || t.dir; },
+      // Sit at the table or by the water; in the grass, sit or lie back (the "lay in the grass" thought).
+      begin: t => { t.dir = spot.face || t.dir; t.pose = o.where === 'in the grass' && chance(0.5) ? 'sleep' : 'sit'; },
+      end: t => { t.pose = null; },
       each: (t, w2, dt) => { t.needs.fun = Math.min(1, t.needs.fun + dt / 60); if (t.needs.fun >= 1) return 'done'; },
       finish: t => addThought(t, w, o.seat ? 'relaxed_canteen' : o.where === 'by the water' ? 'relaxed_water' : 'relaxed_grass'),
     }),
@@ -242,9 +251,13 @@ function makeRelaxJob(th, w) {
 function makeWanderJob(th, w) {
   const n = pick(nearbyMainNodes(w, th.x, th.y, hasTrait(th, 'curious') ? 340 : 160));
   if (!n) return null;
+  let nextLook = 0;
   return job('Wandering', [
     goTo(n.x + randRange(-12, 12), n.y + randRange(-12, 12), 'Wandering about'),
-    act(randRange(5, 20), 'Looking around'),
+    act(randRange(5, 20), 'Looking around', {
+      begin: t => { if (chance(0.25)) gesture(t, w, 'stretch', 4); },
+      each: (t, w2) => { if (w2.time >= nextLook) { nextLook = w2.time + randRange(1.5, 4); t.dir = pick(DIRS); } },
+    }),
   ]);
 }
 
@@ -336,7 +349,7 @@ function finishJob(th, w, ok) {
   if (!j) return;
   if (j.started) { const step = j.steps[j.i]; if (step && step.end) step.end(th, w); }
   if (j.cleanup) j.cleanup(th, w);
-  th.job = null; th.route = null; th.moving = false; th.working = false;
+  th.job = null; th.route = null; th.moving = false; th.working = false; th.pose = null;
   if (!ok) th.idleUntil = w.time + 3;
 }
 // Needs can cut a job short: hungry mid-shift means a detour to eat.
@@ -359,6 +372,7 @@ function updateThrimp(th, w, dt) {
   if (w.time >= th.nextMind) { th.nextMind = w.time + MIND_EVERY; refreshMind(th, w); }
   else th.mood = moodOf(th, w); // cheap, and keeps mood exact when a thought runs out between refreshes
   if (th.emote && th.emote.until < w.time) th.emote = null;
+  if (th.gesture && th.gesture.until < w.time) th.gesture = null;
   if (th.job) checkInterrupts(th, w);
   if (!th.job) {
     if (th.idleUntil > w.time) return;
@@ -380,6 +394,7 @@ function tick(w) {
     decayTrails(w);
     updateTrailCosts(w);
     planBuilding(w);
+    updateWeather(w);
   }
   for (const th of w.thrimps) updateThrimp(th, w, dt);
   separateThrimps(w);

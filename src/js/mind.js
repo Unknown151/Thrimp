@@ -66,6 +66,10 @@ const THOUGHTS = {
   catharsis:      { label: 'Let it all out', mood: 12, mins: 36 * HOUR },
   inspired:       { label: 'Inspired!', mood: 8, mins: DAY },
   built_home:     { label: 'Built my own home', mood: 10, mins: 2 * DAY },
+  // Weather (weather.js)
+  got_soaked:     { label: 'Got soaked in the rain', mood: -3, mins: 3 * HOUR },
+  rain_on_roof:   { label: 'Fell asleep to rain on the roof', mood: 3, mins: 8 * HOUR },
+  sunshine:       { label: 'Enjoyed the sunshine', mood: 2, mins: 4 * HOUR },
   // Social (social.js)
   nice_chat:      { label: 'Had a nice chat', mood: 3, mins: 6 * HOUR },
   awkward_chat:   { label: 'Had a grating conversation', mood: -3, mins: 6 * HOUR },
@@ -130,6 +134,7 @@ function refreshMind(th, w) {
   th.thoughts = th.thoughts.filter(t => THOUGHTS[t.id].mins && t.until > w.time); // conditions are re-added below
   refreshRelations(th, w);
   for (const id of conditionThoughts(th, w)) th.thoughts.push({ id, mood: THOUGHTS[id].mood, until: w.time + MIND_EVERY + 1 });
+  weatherThoughts(th, w);
   th.mood = moodOf(th, w);
   if (th.inspiration && th.inspiration.until <= w.time) { th.inspiration = null; remember(th, w, 'The inspiration faded'); }
 
@@ -142,7 +147,7 @@ function refreshMind(th, w) {
     th.inspiration = { type: 'work', until: w.time + DAY };
     th.highFor = 0;
     addThought(th, w, 'inspired');
-    emote(th, w, 'note', 60);
+    emote(th, w, 'idea', 60);
     remember(th, w, 'Got inspired: a work frenzy');
   }
 }

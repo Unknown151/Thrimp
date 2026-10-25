@@ -32,7 +32,8 @@ function updateUI() {
   if (!world) return; // still loading art
   const h = hourOf(world.time);
   $('hud-place').textContent = world.placeName;
-  $('hud-clock').textContent = `Day ${dayOf(world.time)} · ${fmtClock(world.time)} · ${periodName(h)}`;
+  const sky = world.weather ? ` · ${WEATHER[world.weather.kind].label}` : '';
+  $('hud-clock').textContent = `Day ${dayOf(world.time)} · ${fmtClock(world.time)} · ${periodName(h)}${sky}`;
   $('hud-pop').textContent = `${world.thrimps.length} Thrimps`;
   $('hud-food').textContent = `Food ${Math.floor(world.stock.food)}`;
   $('hud-wood').textContent = `Wood ${world.stock.wood}`;

@@ -243,5 +243,6 @@ function tryGenerateWorld() {
   world.sites = [];
   initTrails(world);
   seedTrails(world);
+  initWeather(world);
   return world;
 }

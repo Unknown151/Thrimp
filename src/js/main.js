@@ -18,6 +18,7 @@ function frame(now) {
   processAlerts(now);
   closeThingIfAway(performance.now());
   updateCamera(realDt);
+  updateAmbience(realDt);
   render(clamp(acc / stepLen, 0, 1));
   placeThingPanel();
   if (now - lastUi > 200) { updateUI(); lastUi = now; }

@@ -319,7 +319,7 @@ test('a saved colony comes back identical and keeps living', async ({ page }) =>
     thrimp.run(2 * DAY); // long enough for opinions, memories, trails and the first new hut
     const look = x => ({
       place: x.placeName, time: x.time, stock: JSON.stringify(x.stock), huts: x.buildings.length, sites: x.sites.length,
-      trees: x.trees.map(t => `${t.x},${t.y},${t.stump}`).join(';'), waterT: x.waterT,
+      trees: x.trees.map(t => `${t.x},${t.y},${t.stump}`).join(';'), waterT: x.waterT, weather: JSON.stringify(x.weather),
       thrimps: x.thrimps.map(t => `${t.name}|${t.x.toFixed(2)}|${t.traits}|${JSON.stringify(t.opinions)}|${t.memories.length}|${t.partner}|${t.home}`).join(';'),
     });
     const before = look(w);
@@ -512,6 +512,79 @@ test('a renamed Thrimp keeps the name, also after a save', async ({ page }) => {
       taken: back.names.has('Sir Wobble') };
   });
   expect(r).toEqual({ remembered: true, saved: 'Sir Wobble', taken: true });
+  expect(errors).toEqual([]);
+});
+
+test('the weather changes, and rain soaks those outside but lulls those in bed', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(() => {
+    const w = thrimp.world, seen = new Set();
+    for (let d = 0; d < 6 * DAY; d += HOUR) { thrimp.run(HOUR); seen.add(w.weather.kind); }
+    w.weather.kind = 'rain'; w.weather.until = w.time + 6 * HOUR;
+    const out = w.thrimps.find(t => !t.hidden && !t.asleep), home = w.thrimps.find(t => t.home && t !== out);
+    if (home.job) finishJob(home, w, true);
+    home.hidden = true; home.asleep = true;
+    out.nextMind = home.nextMind = 0;
+    thrimp.run(1);
+    return { kinds: seen.size, soaked: out.thoughts.some(t => t.id === 'got_soaked'), cosy: home.thoughts.some(t => t.id === 'rain_on_roof') };
+  });
+  expect(r.kinds).toBeGreaterThanOrEqual(2);
+  expect(r.soaked).toBe(true);
+  expect(r.cosy).toBe(true);
+  await expect(page.locator('#hud-clock')).toContainText('Rain');
+  expect(errors).toEqual([]);
+});
+
+test('Thrimps sit to eat at the table, lie down outdoors, and stop to wave to friends', async ({ page }) => {
+  const errors = await open(page);
+  await page.waitForFunction(() => ['eat', 'sit-eat', 'sit', 'sleep', 'wave', 'stretch'].every(k => thrimp.anims[k]));
+  const r = await page.evaluate(() => {
+    const w = thrimp.world;
+    let eater = null;
+    for (let m = 0; m < 2 * DAY && !eater; m += 2) {
+      thrimp.run(2);
+      eater = w.thrimps.find(t => t.pose === 'sit' && t.working === 'eat');
+    }
+    const seated = eater && thrimpSprite(eater) === animFacing('sit-eat', eater.dir)[Math.floor(w.time / CONFIG.ACTION_MIN_PER_FRAME + eater.id * 1.3) % animFacing('sit-eat', eater.dir).length];
+    const sleeper = w.thrimps.find(t => !t.hidden && t !== eater);
+    if (sleeper.job) finishJob(sleeper, w, true);
+    sleeper.gesture = null;
+    sleeper.asleep = true;
+    const lying = thrimpSprite(sleeper) === animFacing('sleep', sleeper.dir)[0];
+    sleeper.asleep = false;
+    // Two friends meet: both turn to each other and wave, and a walker stands still until the wave is over.
+    const [a, b] = w.thrimps.filter(t => !t.hidden && t !== eater && t !== sleeper && !t.asleep);
+    for (const t of [a, b]) if (t.job) finishJob(t, w, true);
+    a.x = a.px = w.canteen.door.x - 40; a.y = a.py = w.canteen.door.y + 40; b.x = b.px = a.x + 16; b.y = b.py = a.y;
+    a.opinions[b.id] = 50; b.opinions[a.id] = 50;
+    startJob(a, w, job('Test walk', [goTo(a.x - 60, a.y + 30, 'Walking')]), 'wander');
+    runJob(a, w, CONFIG.MIN_PER_TICK); // starts the route
+    doSocial(a, b, w, 'wave');
+    const facing = a.dir === 'east' && b.dir === 'west', x0 = a.x;
+    thrimp.run(1);
+    const waited = a.x === x0 && a.gesture && a.gesture.anim === 'wave';
+    thrimp.run(5);
+    return { seated, lying, facing, waited, walkedOn: a.x !== x0 && !a.gesture };
+  });
+  expect(r).toEqual({ seated: true, lying: true, facing: true, waited: true, walkedOn: true });
+  expect(errors).toEqual([]);
+});
+
+test('every kind of weather, day and night, draws without errors', async ({ page }) => {
+  const errors = await open(page);
+  for (const [kind, hour] of [['clear', 11], ['cloudy', 15], ['rain', 13], ['fog', 6], ['clear', 19], ['clear', 23], ['rain', 2]]) {
+    await page.evaluate(([k, h]) => {
+      const w = thrimp.world;
+      w.time = Math.floor(w.time / DAY) * DAY + h * HOUR;
+      w.weather.kind = k; w.weather.until = w.time + 5 * HOUR; w.weather.wind = w.weather.windTarget = k === 'rain' ? 0.9 : 0.4;
+      amb.nextGround = 0; amb.nextFlock = 0;
+      thrimp.setSpeed(1);
+    }, [kind, hour]);
+    await page.waitForTimeout(700);
+  }
+  const state = await page.evaluate(() => ({ drops: amb.drops.length, flies: amb.fireflies.length }));
+  expect(state.drops).toBeGreaterThan(0);   // last stop: rain at night
+  expect(state.flies).toBe(0);              // and no fireflies in the rain
   expect(errors).toEqual([]);
 });
 
