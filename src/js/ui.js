@@ -14,9 +14,15 @@ function select(id) {
   if (!id) cam.follow = false;
   updateUI();
 }
-function selectThing(t) {
+// `at` is the world point that was clicked; the panel opens beside it (or beside the thing itself).
+function selectThing(t, at) {
   game.thing = t;
-  if (t) { game.selected = 0; cam.follow = false; }
+  game.thingAwaySince = 0;
+  if (t) {
+    game.selected = 0; cam.follow = false;
+    const obj = findThing(t), p = obj && (obj.p || obj);
+    game.thingAnchor = at || (p ? { x: p.x, y: p.y - 12 } : { x: cam.x, y: cam.y });
+  }
   updateUI();
 }
 function barColor(v) { return v > 0.5 ? 'var(--good)' : v > 0.25 ? 'var(--warn)' : 'var(--bad)'; }
@@ -243,6 +249,23 @@ function updateThingPanel() {
     });
     return row;
   }));
+  placeThingPanel();
+}
+// The panel closes once the pointer has been off both the thing and the panel for a moment (input.js starts the
+// clock); the grace lets the pointer cross the gap from the thing onto the panel to click a name.
+const THING_AWAY_MS = 400;
+function closeThingIfAway(now) {
+  if (game.thing && game.thingAwaySince && now - game.thingAwaySince > THING_AWAY_MS) selectThing(null);
+}
+// Every frame: keep the panel beside the clicked spot as the camera moves, flipping to the left near the right edge
+// and staying on screen.
+function placeThingPanel() {
+  const el = $('thing');
+  if (!game.thing || !game.thingAnchor || el.style.display === 'none') return;
+  const p = worldToScreen(game.thingAnchor.x, game.thingAnchor.y), w = el.offsetWidth, h = el.offsetHeight, gap = 18;
+  const x = p.x + gap + w <= viewW - 8 ? p.x + gap : p.x - gap - w;
+  el.style.left = Math.round(clamp(x, 8, viewW - w - 8)) + 'px';
+  el.style.top = Math.round(clamp(p.y - 24, 8, viewH - h - 8)) + 'px';
 }
 
 // ============================================================

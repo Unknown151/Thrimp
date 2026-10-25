@@ -65,7 +65,7 @@
   #inspector .name:hover { text-decoration: underline dotted; }
   #i-rename { font: inherit; font-size: 15px; font-weight: bold; color: var(--accent); background: #262b44;
     border: 1px solid var(--accent); border-radius: 3px; width: 170px; padding: 1px 4px; }
-  #thing { top: 56px; right: 10px; width: 250px; display: none; }
+  #thing { top: 56px; left: 10px; width: 250px; display: none; z-index: 2; } /* moved beside the clicked spot by placeThingPanel */
   #thing .head { display: flex; justify-content: space-between; align-items: center; }
   #thing .name { color: var(--accent); font-weight: bold; font-size: 16px; }
   #t-body .row { margin-top: 6px; }

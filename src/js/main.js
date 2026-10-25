@@ -16,8 +16,10 @@ function frame(now) {
   }
   if (steps >= CONFIG.MAX_STEPS_PER_FRAME) acc = 0;
   processAlerts(now);
+  closeThingIfAway(performance.now());
   updateCamera(realDt);
   render(clamp(acc / stepLen, 0, 1));
+  placeThingPanel();
   if (now - lastUi > 200) { updateUI(); lastUi = now; }
   requestAnimationFrame(frame);
 }
