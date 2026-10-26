@@ -109,7 +109,7 @@ function tryGenerateWorld() {
   const world = {
     seed: SEED, time: CONFIG.START_HOUR * HOUR, tick: 0,
     placeName: makePlaceName(),
-    stock: { food: CONFIG.START_FOOD, wood: 0 },
+    stock: { food: CONFIG.START_FOOD, wood: 0, planks: 0, stone: 0 },
     buildings: [], byId: new Map(), trees: [], bushes: [], thrimps: [],
     tables: [], seats: [], shoreSpots: [], noBuild: [], dirtSpots: [],
     names: new Set(), nextId: 1, stats: {},
@@ -162,6 +162,7 @@ function tryGenerateWorld() {
       if (hut) { hut.label = `Hut ${k + 1}`; break; }
     }
   }
+  placeOutcrops(world); // stone for later, once someone works out how to cut it (crafts.js)
 
   // Trees: thick toward the edges, a few strays in the open.
   const treeBuckets = new Map(), TB = 32, tcols = Math.ceil(MAP_W / TB);
@@ -258,6 +259,7 @@ function tryGenerateWorld() {
   }
   world.sites = [];
   world.dead = []; world.graves = []; world.graveyard = null;
+  world.knowledge = {}; // skill -> who first worked it out (crafts.js)
   initTrails(world);
   seedTrails(world);
   initWeather(world);

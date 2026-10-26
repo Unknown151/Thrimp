@@ -382,9 +382,15 @@ Build step 7 (Resources & pressure) around a general knowledge-and-ages system, 
 slice of three ages** (foraging, settled, bronze & iron). That shows whether ages feel good in Thrimp before
 committing to more.
 
+### Decided so far
+- **[Decided]** New kinds of work are **invented by a Thrimp**, not unlocked by the player or simply built when
+  needed. Knowledge lives in heads: it is taught, passed from parents to children, and **can be lost** when the last
+  Thrimp who knew it dies (2026-10-26). Built: sawing and stone-cutting (`crafts.js`).
+- **[Decided]** Better homes are **upgrades in place**: a hut becomes a cottage, then a stone house, on the same spot
+  with the same family inside (2026-10-26).
+
 ### Open questions
 - How far should a colony be able to go: three ages, towns, or all the way to space?
 - Which time option: natural pace, compressed, or era jumps?
-- Can knowledge be lost (a colony sliding back an age), or only gained?
 - Is a space launch an ending, or does the run go on?
 - Does every run start in the foraging age, or can a run start later?

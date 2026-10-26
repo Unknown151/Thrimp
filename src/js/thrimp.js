@@ -13,7 +13,8 @@ function makeThrimp(world, x, y, homeId, ageInDays = randRange(8.5, 22)) {
     speed: CONFIG.WALK_SPEED * randRange(0.85, 1.15),
     needs: { food: randRange(0.6, 0.9), rest: randRange(0.7, 0.95), fun: randRange(0.4, 0.9), social: randRange(0.5, 0.9) },
     schedule: { wake: clamp(randRange(5, 7.5) + shift, 4, 9.5), bed: clamp(randRange(21, 23.2) + shift, 19.5, 23.9) },
-    likes: { forage: randRange(0.75, 1.25), chop: randRange(0.75, 1.25) },
+    likes: { forage: randRange(0.75, 1.25), chop: randRange(0.75, 1.25), saw: randRange(0.75, 1.25), quarry: randRange(0.75, 1.25) },
+    knows: [], // skills: 'sawing', 'quarrying' (crafts.js)
     traits, thoughts: [], mood: 0, lowFor: 0, highFor: 0, inspiration: null, breaking: null, breaks: 0, nextMind: 0,
     opinions: {}, chemistry: {}, grudges: {}, memories: [], partner: 0, nextPerceive: randRange(0, PERCEIVE_EVERY), socialCooldown: 0,
     home: homeId,
@@ -25,7 +26,7 @@ function makeThrimp(world, x, y, homeId, ageInDays = randRange(8.5, 22)) {
 const isSleepTime = (th, h) => h >= th.schedule.bed || h < th.schedule.wake;
 const isWorkTime = (th, h) => h >= th.schedule.wake + 1 && h < 18;
 const isMealTime = h => (h >= 7 && h < 8.5) || (h >= 12 && h < 13.5) || (h >= 18 && h < 19.5);
-const WORK_JOBS = new Set(['forage', 'chop', 'haul']);
+const WORK_JOBS = new Set(['forage', 'chop', 'haul', 'saw', 'quarry']);
 
 function updateNeeds(th, dt) {
   const n = th.needs;

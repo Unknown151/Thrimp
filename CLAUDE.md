@@ -107,6 +107,8 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | tables, shelter, storehouse | quiet until their triggers; standing meals add a table (3 seats), the shelter keeps the rain off, the storehouse stops rain spoiling food; each idea is remembered by whoever had it |
 | healer, house, play area, memorial | the sick rest at the healer's (fever shortened), a crowded family moves into a house with its children, children play at the play area, the memorial goes up by the graves |
 | campfire | once built, at least three gather round it on a dry evening |
+| sawing | logs piling up get a fitting adult to invent sawing, it's taught over chats, a sawmill is built, and planks get sawn |
+| quarry and upgrades | a quarry cuts stone from its rock; a hut is rebuilt in place as a cottage, then a stone house, same people inside; the canteen is extended (room for 10 tables) |
 | pacing | one game day simulates in under 1.5 s |
 
 **Pacing baseline:** one game day with 12 Thrimps takes about 55-60 ms in Edge on Rasmus's PC on a quiet day
@@ -132,6 +134,7 @@ update is under 0.1 ms.
 | `src/js/social.js` | Spatial hash, opinions, chemistry, grudges, memories, `SOCIAL` encounters, fights, couples, gossip, personal space |
 | `src/js/construction.js` | Who needs a home, site choice, building sites of any type in stages, build jobs, completion |
 | `src/js/projects.js` | `PROJECTS`: buildings Thrimps think up (house, table, campfire, shelter, storehouse, healer, memorial, play area), their triggers and what they do |
+| `src/js/crafts.js` | Skills (`SKILLS`, `INVENTIONS`): inventing, teaching, inheriting, losing them; stone outcrops; sawing and quarrying jobs; sawmill, quarry, home and canteen upgrades |
 | `src/js/weather.js` | `WEATHER` (clear, cloudy, rain, fog), hourly changes and wind, what the sky does to moods |
 | `src/js/life.js` | Ages and life stages, health, fever, births and inheritance, deaths, grief, graves and mourning |
 | `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
@@ -144,7 +147,7 @@ update is under 0.1 ms.
 | `src/js/save.js` | `serializeWorld` / `restoreWorld`, gzip, talking to the Worker, autosave, "New world" |
 | `src/js/main.js` | Fixed-step main loop, `init` (load the save or make a world), the `window.thrimp` console/test handle |
 | `worker/index.js` | The Cloudflare Worker for `/api/save`: Access token check, KV storage, conflict check |
-| `assets/` | Shipped art: `thrimp/*.png` (idle, walk, gather, chop, fight, eat, sit-eat, sit, sleep, wave, stretch sheets), `objects/*.png`, `favicon.png` |
+| `assets/` | Shipped art: `thrimp/*.png` (idle, walk, gather, chop, fight, eat, sit-eat, sit, sleep, wave, stretch, saw, mine, child-walk, child-idle sheets), `objects/*.png`, `favicon.png` |
 | `art/` | Raw PixelLab downloads, `pixellab-objects.json` (object name -> id), previews (not shipped) |
 | `tools/` | `build-sheet.ps1` (frames -> palette-locked sheet), `fetch-frames.ps1`, `fetch-objects.ps1` |
 | `test/` | Playwright tests; `shots.mjs` saves screenshots of a fresh world (needs `npm run dev`) |
@@ -243,6 +246,21 @@ update is under 0.1 ms.
   sometimes while looking around. `thrimpSprite` picks, in order: walk, gesture, work action (seated eating uses
   `sit-eat`), still pose, idle breathing. Gestures and seated eating exist facing south/east/north/west only;
   `animFacing` uses the nearest side for diagonals.
+- **Crafts** (`crafts.js`, decided with Rasmus 2026-10-26: skills are invented by Thrimps; homes upgrade in place).
+  Skills live in heads (`th.knows`); `w.knowledge` remembers who first worked each out. Hourly, a skill nobody alive
+  knows can be invented by a fitting adult (likes the work, curious or hard-working) once its `INVENTIONS.when` holds:
+  sawing from day 5 with 40+ logs stacked, quarrying from day 10 once a cottage stands; if the workplace still stands,
+  reinventing is 3x likelier. Skills spread at chats (12%) and half of a parent's skills pass to a child growing up;
+  if every knower dies, the skill is lost. Materials: `w.stock` has wood, planks and stone; a site's `cost` can mix
+  them (`delivered`/`deliver`, fetched from lumberyard, sawmill or quarry by `MATERIAL_SOURCE`), and work runs only
+  as far as the scarcest delivered material. Sawing: 2 logs from the lumberyard become 3 planks at the sawmill;
+  quarrying: 2 stone from the quarry's own outcrop (`w.outcrops`, 3-4 per map, 40-70 stone, finite; worked out it
+  shows as small rocks, and a new quarry goes to another outcrop). Both stop at 60 stacked. Upgrades are sites on the
+  building itself (`upgradeOf`; no new ground, residents stay): hut to cottage (planks, room 5, "A cosy cottage" +2),
+  cottage lived in for 3 days to stone house (stone, room 7, "A sturdy stone house" +4), one at a time and a day
+  apart (`w.lastUpgrade`); the canteen extends (`canteen-big` art, room for 10 tables) when 6 tables aren't enough or
+  there's no room for another. In 40-day test colonies sawing came around day 4-5, stone around day 10-12, and homes
+  upgraded steadily through days 5-30.
 - **Life cycle** (`life.js`, decided with Rasmus 2026-10-25: about 40 game days of life; death by age, hunger,
   fever or violence). Each Thrimp has `born` (game time), its own `lifespan` (34-46 days) and a cached `stage`
   (child under 8 days, elder from 30), refreshed hourly; ages show as years (2 a day). Children don't work (they
@@ -296,6 +314,9 @@ update is under 0.1 ms.
   of the base Thrimp keeps adult height, so `74e03353-...` "Child" isn't used). Its colours drifted pale, so its
   sheets are built with `-PaletteFrom` the adult's rotations. Children use only `child-walk` and `child-idle`.
 - Graves: objects `grave` (fresh) and `grave-old` (from 4 days on).
+- Crafts: objects `sawmill`, `quarry`, `cottage`, `stonehouse` (96 px), `outcrop-1`, `outcrop-2` (64), `canteen-big`
+  (192x128, keeps the canteen's footprint). Animations `saw` and `mine` are custom (v3), east and west only, built
+  without `-PaletteFrom` so the tools keep their colours. Carried planks and stone are drawn in code.
 - Buildings Thrimps think up: `house-big` (128 px canvas), `shelter`, `storehouse`, `healer-hut` (96), `playground`
   (64), `memorial` (48), `campfire` (32). Their flames are partly in the art; `drawFlames` adds flicker in the evening.
 - Custom (v3) animations come back on bigger canvases that differ per direction (40 px south, 44 px east);

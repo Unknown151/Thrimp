@@ -105,6 +105,11 @@ const THOUGHTS = {
   remembered:     { label: 'Remembered them at the memorial stone', mood: 3, mins: DAY },
   played:         { label: 'Played at the play area', mood: 4, mins: 8 * HOUR },
   cared_for:      { label: 'Nursed back to health', mood: 5, mins: 2 * DAY },
+  // Crafts (crafts.js)
+  invented:       { label: 'Worked something out!', mood: 10, mins: 2 * DAY },
+  better_home:    { label: 'Our home got better', mood: 8, mins: 3 * DAY },
+  cosy_home:      { label: 'A cosy cottage', mood: 2 },
+  stone_home:     { label: 'A sturdy stone house', mood: 4 },
   // Conditions: recomputed every refresh while they hold, so they last only as long as the cause.
   crowded_home:   { label: 'Home is too crowded', mood: -4 },
   sick:           { label: 'Sick with a fever', mood: -8 },
@@ -151,6 +156,7 @@ function conditionThoughts(th, w) {
   else {
     const home = w.byId.get(th.home), T = home && BUILDING_TYPES[home.type];
     if (T && T.home && residentsOf(w, home).length > T.room) out.push('crowded_home');
+    if (T && T.comfort) out.push(T.comfort);
   }
   if (th.sick) out.push('sick');
   if (th.health < 0.5) out.push('hurt');

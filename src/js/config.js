@@ -47,6 +47,7 @@ const THRIMP_SHEETS = {
   eat: 'assets/thrimp/eat.png', 'sit-eat': 'assets/thrimp/sit-eat.png', sit: 'assets/thrimp/sit.png',
   sleep: 'assets/thrimp/sleep.png', wave: 'assets/thrimp/wave.png', stretch: 'assets/thrimp/stretch.png',
   'child-walk': 'assets/thrimp/child-walk.png', 'child-idle': 'assets/thrimp/child-idle.png',
+  saw: 'assets/thrimp/saw.png', mine: 'assets/thrimp/mine.png',
 };
 
 // PixelLab object art, one PNG each in assets/objects/. The world is generated after these load, because
@@ -57,6 +58,7 @@ const OBJECT_ART = [
   'oak-1', 'oak-2', 'oak-small', 'pine-1', 'pine-2', 'stump', 'bush-full', 'bush-bare',
   'rocks', 'flowers', 'reeds', 'basket', 'hut-stage-1', 'hut-stage-2', 'hut-stage-3', 'grave', 'grave-old',
   'house-big', 'campfire', 'shelter', 'storehouse', 'healer-hut', 'memorial', 'playground',
+  'sawmill', 'quarry', 'outcrop-1', 'outcrop-2', 'cottage', 'stonehouse', 'canteen-big',
 ];
 const TREE_ART = { oak: ['oak-1', 'oak-2', 'oak-small'], pine: ['pine-1', 'pine-2'] };
 
@@ -74,6 +76,12 @@ const BUILDING_TYPES = {
   healer:     { label: 'Healer\'s hut', w: 50, h: 28, art: ['healer-hut'] },
   memorial:   { label: 'Memorial stone', w: 12, h: 8, art: ['memorial'] },
   playground: { label: 'Play area',  w: 44, h: 18, art: ['playground'], solid: false },
+  // Homes upgraded in place (crafts.js): same footprint, more room, and a home to be proud of.
+  cottage:    { label: 'Cottage',    w: 54, h: 30, art: ['cottage'], home: true, room: 5, comfort: 'cosy_home' },
+  stonehouse: { label: 'Stone house', w: 54, h: 30, art: ['stonehouse'], home: true, room: 7, comfort: 'stone_home' },
+  sawmill:    { label: 'Sawmill',    w: 50, h: 22, art: ['sawmill'] },
+  outcrop:    { label: 'Rocks',      w: 36, h: 12, art: ['outcrop-1', 'outcrop-2'] }, // not a building: placed with the same checks
+  quarry:     { label: 'Quarry',     w: 44, h: 18, art: ['quarry'] },
 };
 
 // Screen directions in atan2 order (east = 0, clockwise because y points down).

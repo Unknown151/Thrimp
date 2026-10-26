@@ -9,15 +9,34 @@ const BUILD_CHUNK = 40;         // minutes of building per stint
 const MAX_SITES = 3;            // at most this many things going up at once
 const SITE_STAGES = ['hut-stage-1', 'hut-stage-2', 'hut-stage-3'];
 
-// What a site takes: huts use the constants above, other types their PROJECTS entry (projects.js).
+// What a site takes: huts use the constants above, other types their PROJECTS entry (projects.js, crafts.js):
+// a `cost` in wood, planks and stone, or just `wood`.
+const MATERIALS = ['wood', 'planks', 'stone'];
+const MATERIAL_WORD = { wood: 'logs', planks: 'planks', stone: 'stone' };
 const siteType = s => s.type || 'hut';
-const siteWood = s => siteType(s) === 'hut' ? HUT_WOOD : PROJECTS[siteType(s)].wood;
+const siteCost = s => siteType(s) === 'hut' ? { wood: HUT_WOOD } : PROJECTS[siteType(s)].cost || { wood: PROJECTS[siteType(s)].wood };
+const siteWood = s => siteCost(s).wood || 0;
 const siteWork = s => siteType(s) === 'hut' ? HUT_WORK : PROJECTS[siteType(s)].work;
 const siteWhat = s => s.what || 'a hut';
 const siteStage = s => Math.min(SITE_STAGES.length - 1, Math.floor(s.work / siteWork(s) * SITE_STAGES.length));
-const woodNeededFor = (s, work) => Math.ceil(work / siteWork(s) * siteWood(s));
-// Labour can only run as far as the wood already delivered allows.
-const workAllowed = s => Math.min(siteWork(s), s.woodIn / siteWood(s) * siteWork(s));
+const delivered = (s, m) => m === 'wood' ? s.woodIn : (s.in && s.in[m]) || 0;
+function deliver(s, m, n) { if (m === 'wood') s.woodIn += n; else { s.in = s.in || {}; s.in[m] = (s.in[m] || 0) + n; } }
+const neededFor = (s, m, work) => Math.ceil(work / siteWork(s) * (siteCost(s)[m] || 0));
+const woodNeededFor = (s, work) => neededFor(s, 'wood', work);
+// Labour can only run as far as the scarcest delivered material allows.
+function workAllowed(s) {
+  const c = siteCost(s);
+  let f = 1;
+  for (const m of MATERIALS) if (c[m]) f = Math.min(f, delivered(s, m) / c[m]);
+  return Math.min(siteWork(s), f * siteWork(s));
+}
+// Where each material is fetched from.
+const MATERIAL_SOURCE = {
+  wood: w => w.lumberyard && w.lumberyard.drop,
+  planks: w => { const b = buildingOf(w, 'sawmill'); return b && b.door; },
+  stone: w => { const b = buildingOf(w, 'quarry'); return b && b.door; },
+};
+const materialsText = s => MATERIALS.filter(m => siteCost(s)[m]).map(m => `${delivered(s, m)} of ${siteCost(s)[m]} ${MATERIAL_WORD[m]}`).join(', ');
 const residentsOf = (w, b) => w.thrimps.filter(t => t.home === b.id);
 
 // Runs hourly. Who needs a home of their own? Couples living apart, anyone without a home at all, and families who
@@ -109,14 +128,16 @@ function makeBuildJob(th, w) {
   const site = open.find(s => s.owners.includes(th.id)) || open.sort((a, b) => dist(a.p.x, a.p.y, th.x, th.y) - dist(b.p.x, b.p.y, th.x, th.y))[0];
   const side = chance(0.5) ? -1 : 1, spot = { x: site.p.x + side * (site.p.w / 2 + 8), y: site.p.y + 3 };
   const steps = [];
-  const short = site.woodIn < Math.min(siteWood(site), woodNeededFor(site, site.work + BUILD_CHUNK));
+  // The first material that's behind what the next stint needs gets fetched from where it's made.
+  const cost = siteCost(site), short = MATERIALS.find(m => cost[m] && delivered(site, m) < Math.min(cost[m], neededFor(site, m, site.work + BUILD_CHUNK)));
   if (short) {
-    if (!w.lumberyard || w.stock.wood < 2) return null;
+    const from = MATERIAL_SOURCE[short](w), word = MATERIAL_WORD[short];
+    if (!from || (w.stock[short] || 0) < 2) return null;
     steps.push(
-      goTo(w.lumberyard.drop.x + randRange(-6, 6), w.lumberyard.drop.y + 2, `Fetching logs for ${siteWhat(site)}`),
-      act(3, 'Picking up logs', { begin: t => { if (w.stock.wood < 2) return 'fail'; w.stock.wood -= 2; t.carrying = { kind: 'wood', amount: 2 }; } }),
-      goTo(spot.x, spot.y, 'Carrying logs to the building site'),
-      act(3, 'Dropping off logs', { finish: t => { if (t.carrying && t.carrying.kind === 'wood') { site.woodIn += t.carrying.amount; t.carrying = null; } } }),
+      goTo(from.x + randRange(-6, 6), from.y + 2, `Fetching ${word} for ${siteWhat(site)}`),
+      act(3, `Picking up ${word}`, { begin: t => { if ((w.stock[short] || 0) < 2) return 'fail'; w.stock[short] -= 2; t.carrying = { kind: short, amount: 2 }; } }),
+      goTo(spot.x, spot.y, `Carrying ${word} to the building site`),
+      act(3, `Dropping off ${word}`, { finish: t => { if (t.carrying && t.carrying.kind === short) { deliver(site, short, t.carrying.amount); t.carrying = null; } } }),
     );
   } else {
     steps.push(goTo(spot.x, spot.y, 'Walking to the building site'));
@@ -143,7 +164,9 @@ function completeSite(w, site) {
     finishProject(w, site, owners, null);
     return;
   }
+  if (site.upgradeOf) { finishUpgrade(w, site, owners); finishProject(w, site, owners, null); return; } // crafts.js
   const b = addBuilding(w, site.p);
+  if (site.outcrop) b.outcrop = site.outcrop;
   const T = BUILDING_TYPES[b.type];
   if (T.home) b.label = `${T.label} ${w.buildings.filter(x => x.type === b.type).length}`;
   Object.assign(b, { builtDay: dayOf(w.time), builtBy: site.owners, fromSite: site.id }); // for the info panel

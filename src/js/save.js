@@ -30,6 +30,7 @@ function serializeWorld(w) {
     shoreSpots: w.shoreSpots, noBuild: w.noBuild, dirtSpots: w.dirtSpots, sites: w.sites,
     dead: w.dead, graves: w.graves, graveyard: w.graveyard, lastOutbreak: w.lastOutbreak,
     standingMeals: w.standingMeals || 0, lastSpoilAlert: w.lastSpoilAlert,
+    knowledge: w.knowledge, outcrops: w.outcrops, lastUpgrade: w.lastUpgrade,
     thrimps: w.thrimps.map(th => {
       const { job, route, ...rest } = th;
       return { ...rest, moving: false, working: false, hidden: false, asleep: false, breaking: null, emote: null, trailCell: -1,
@@ -49,8 +50,15 @@ function restoreWorld(d) {
     // Saves from before the life cycle have no dead, no graves and no ages: those start fresh (ensureLife).
     dead: d.dead || [], graves: d.graves || [], graveyard: d.graveyard || null, lastOutbreak: d.lastOutbreak,
     standingMeals: d.standingMeals || 0, lastSpoilAlert: d.lastSpoilAlert,
+    knowledge: d.knowledge || {}, outcrops: d.outcrops || null, lastUpgrade: d.lastUpgrade,
   };
-  for (const th of w.thrimps) ensureLife(th, w);
+  // Saves from before crafts: no planks or stone yet, nobody knows a skill, every job has a liking.
+  w.stock.planks = w.stock.planks || 0; w.stock.stone = w.stock.stone || 0;
+  for (const th of w.thrimps) {
+    ensureLife(th, w);
+    th.knows = th.knows || [];
+    th.likes.saw = th.likes.saw || randRange(0.75, 1.25); th.likes.quarry = th.likes.quarry || randRange(0.75, 1.25);
+  }
   buildTerrain(w);
   if (d.weather) w.weather = d.weather; else initWeather(w); // saves from before the weather simply start clear
   w.byId = new Map(w.buildings.map(b => [b.id, b]));
@@ -62,6 +70,8 @@ function restoreWorld(d) {
   for (const b of w.buildings) if (isSolidType(b.type)) markSolid(w, b.x - b.w / 2, b.y - b.h, b.x + b.w / 2 - 1, b.y - 1);
   for (const s of w.sites) if (isSolidType(s.p.type || 'hut')) markSolid(w, s.p.x - s.p.w / 2, s.p.y - s.p.h, s.p.x + s.p.w / 2 - 1, s.p.y - 1);
   for (const t of w.trees) markSolid(w, t.x - 2, t.y - 2, t.x + 2, t.y);
+  if (w.outcrops) for (const o of w.outcrops) markSolid(w, o.x - o.w / 2, o.y - o.h, o.x + o.w / 2 - 1, o.y - 1);
+  else placeOutcrops(w); // an older colony finds its rocks now
   for (const th of w.thrimps) { th.px = th.x; th.py = th.y; }
   initTrails(w);
   let i = 0;

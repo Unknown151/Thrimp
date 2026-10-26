@@ -36,7 +36,9 @@ function updateUI() {
   $('hud-clock').textContent = `Day ${dayOf(world.time)} · ${fmtClock(world.time)} · ${periodName(h)}${sky}`;
   $('hud-pop').textContent = `${world.thrimps.length} Thrimps`;
   $('hud-food').textContent = `Food ${Math.floor(world.stock.food)}`;
-  $('hud-wood').textContent = `Wood ${world.stock.wood}`;
+  const crafted = [world.stock.planks || buildingOf(world, 'sawmill') ? ` · Planks ${world.stock.planks}` : '',
+    world.stock.stone || buildingOf(world, 'quarry') ? ` · Stone ${world.stock.stone}` : ''].join('');
+  $('hud-wood').textContent = `Wood ${world.stock.wood}${crafted}`;
   const avg = world.thrimps.reduce((s, t) => s + t.mood, 0) / world.thrimps.length;
   const broken = world.thrimps.filter(t => t.breaking).length;
   $('hud-mood').textContent = `Colony mood ${signed(Math.round(avg))} (${moodLabel(avg).toLowerCase()})${broken ? ` · ${broken} breaking down` : ''}`;
@@ -100,8 +102,11 @@ function updateUI() {
     return li;
   }));
   $('i-carry').textContent = th.carrying ? `Carrying ${th.carrying.amount} ${th.carrying.kind === 'food' ? 'berries' : 'logs'}` : '';
-  const likes = Object.entries(th.likes).filter(([, v]) => v > 1.1).map(([k]) => k === 'forage' ? 'foraging' : 'chopping wood');
-  $('i-likes').textContent = likes.length ? `Enjoys ${likes.join(' and ')}` : '';
+  const LIKE_WORDS = { forage: 'foraging', chop: 'chopping wood', saw: 'sawing', quarry: 'cutting stone' };
+  const likes = Object.entries(th.likes).filter(([k, v]) => v > 1.1 && (k === 'forage' || k === 'chop' || knows(th, k === 'saw' ? 'sawing' : 'quarrying')))
+    .map(([k]) => LIKE_WORDS[k]);
+  const skills = (th.knows || []).map(k => SKILLS[k].label);
+  $('i-likes').textContent = [likes.length ? `Enjoys ${likes.join(' and ')}` : '', skills.length ? `Knows ${skills.join(' and ')}` : ''].filter(Boolean).join(' · ');
   // Relationships: the partner first, then whoever they feel most strongly about either way.
   const known = Object.keys(th.opinions).map(id => byId(world, +id)).filter(Boolean)
     .sort((a, b) => (b.id === th.partner) - (a.id === th.partner) || Math.abs(opinionOf(th, b)) - Math.abs(opinionOf(th, a)))
@@ -182,6 +187,7 @@ function thingAt(wx, wy) {
   }
   for (const b of world.bushes) test('bush', b.id, b.y, spriteBox(art('bush-full') || sprites.bush, b.x, b.y));
   for (const g of world.graves) { const s = graveArt(g); if (s) test('grave', g.id, g.y, spriteBox(s, g.x, g.y)); }
+  for (const o of world.outcrops || []) { const s = art(o.art); if (s) test('outcrop', o.id, o.y, spriteBox(s, o.x, o.y)); }
   for (const t of world.trees) {
     const s = t.stump ? (art('stump') || sprites.stump) : (art(t.art) || sprites[t.kind][t.variant]);
     test('tree', t.id, t.y, spriteBox(s, t.x, t.y));
@@ -196,6 +202,7 @@ function findThing(t) {
   if (t.kind === 'bush') return world.bushes.find(b => b.id === t.id);
   if (t.kind === 'tree') return world.trees.find(x => x.id === t.id);
   if (t.kind === 'grave') return graveById(world, t.id);
+  if (t.kind === 'outcrop') return outcropById(world, t.id);
   return null;
 }
 
@@ -225,6 +232,7 @@ function updateThingPanel() {
     const inside = world.thrimps.filter(t => t.hidden && t.home === obj.id);
     rows.push(['Inside now', inside.length ? namesOf(inside) : 'nobody']);
     built();
+    if (obj.upgradedDay) rows.push(['Rebuilt', `as a ${BUILDING_TYPES[obj.type].label.toLowerCase()} on day ${obj.upgradedDay}`]);
   } else if (k === 'building' && obj.type === 'campfire') {
     title = 'The campfire';
     rows.push(['Fire', fireLit() ? 'burning' : 'cold until the evening']);
@@ -249,12 +257,30 @@ function updateThingPanel() {
     rows.push(['In memory of', `${world.dead.length} who have died`]);
     rows.push(['Remembering now', namesOf(doing(t => t.job.steps[t.job.i].label === 'Relaxing by the memorial stone'))]);
     built();
+  } else if (k === 'building' && obj.type === 'sawmill') {
+    title = 'The sawmill';
+    rows.push(['Planks stacked', `${world.stock.planks}`]);
+    rows.push(['Sawing now', at('saw')]);
+    rows.push(['Know how', knowersOf(world, 'sawing').length ? namesOf(knowersOf(world, 'sawing')) : 'nobody alive: the skill is lost']);
+    built();
+  } else if (k === 'building' && obj.type === 'quarry') {
+    title = 'The quarry';
+    const o = outcropById(world, obj.outcrop);
+    rows.push(['Stone stacked', `${world.stock.stone}`]);
+    rows.push(['Stone left in the rock', o ? `${o.stone} of ${o.max}` : 'none']);
+    rows.push(['Cutting now', at('quarry')]);
+    rows.push(['Know how', knowersOf(world, 'quarrying').length ? namesOf(knowersOf(world, 'quarrying')) : 'nobody alive: the skill is lost']);
+    built();
+  } else if (k === 'outcrop') {
+    title = 'Rock outcrop';
+    rows.push(['Stone left', obj.stone >= 2 ? `${obj.stone} of ${obj.max}` : 'worked out']);
+    rows.push(['Quarried', world.buildings.some(b => b.outcrop === obj.id) ? 'yes' : knowersOf(world, 'quarrying').length ? 'not yet' : 'nobody knows how to cut stone']);
   } else if (k === 'building' && obj.type === 'playground') {
     title = 'The play area';
     rows.push(['Playing now', namesOf(doing(t => t.job.title === 'Off to the play area'))]);
     built();
   } else if (k === 'building' && obj.type === 'canteen') {
-    title = 'The canteen';
+    title = obj.art === 'canteen-big' ? 'The canteen (extended)' : 'The canteen';
     rows.push(['Food in store', `${Math.floor(world.stock.food)} berries${world.crate.broken ? ' (crate smashed: spoiling!)' : ''}`]);
     const smashed = world.tables.filter(t => t.broken).length;
     rows.push(['Tables', `${world.tables.length}${smashed ? ` (${smashed} smashed)` : ''}`]);
@@ -269,7 +295,7 @@ function updateThingPanel() {
     title = hutSite ? 'A hut going up' : `Building ${siteWhat(obj)}`;
     rows.push([hutSite ? 'For' : 'Whose idea', namesOf(obj.owners.map(id => byId(world, id)).filter(Boolean))]);
     rows.push(['Progress', hutSite ? `stage ${siteStage(obj) + 1} of 3, ${pct}%` : `${pct}%`]);
-    rows.push(['Wood delivered', `${obj.woodIn} of ${siteWood(obj)} logs`]);
+    rows.push(['Delivered', materialsText(obj)]);
     rows.push(['Working on it', namesOf(doing(t => t.job.type === 'build'))]);
     rows.push(['Started', `day ${dayOf(obj.started)}`]);
   } else if (k === 'bush') {

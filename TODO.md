@@ -40,6 +40,10 @@ The build order comes from section 12 of [thrimp-design.md](thrimp-design.md).
   gatherings, a family tree view, orphans taken in by relatives
 - [x] Buildings Thrimps think up (2026-10-26): family houses, more canteen tables, campfire, rain shelter,
   storehouse, healer's hut, memorial stone, play area, each from something that happened in the colony
+- [x] Crafts, first step (2026-10-26): sawing and quarrying invented by Thrimps (knowledge in heads, taught,
+  inherited, lost), sawmill and quarry, planks and stone, finite rock outcrops, huts upgraded in place to cottages
+  and stone houses, a bigger canteen. Next: paved roads (worn trails laid with stone), clay and a kiln, better
+  roofs from reeds; wood still piles up (chopping never stops)
 - [ ] 7. **Resources & pressure:** depletion, invention, relocation and splitting
 - [ ] 8. **God powers:** influence, good / bad / neutral powers, the colony's opinion of the player
 - [ ] 9. **Claude voice:** diaries, prayers, chronicle chapters, myths

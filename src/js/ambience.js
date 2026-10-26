@@ -7,7 +7,7 @@ const arand = (a, b) => a + Math.random() * (b - a);
 const amb = { world: null, t: 0, wind: 0.3, rain: 0, cloud: 0, fog: 0, butterflies: [], flocks: [], flying: [],
   ripples: [], drops: [], splashes: [], smoke: [], leaves: [], fireflies: [], clouds: [], fogCanvas: null,
   nextFlock: 0, nextGround: 0, nextRipple: 0, nextSmoke: 0, nextLeaf: 0 };
-const CHIMNEYS = { 'hut-b': [10, -42], 'house-big': [11, -62] }; // chimney top relative to the anchor, measured from the art
+const CHIMNEYS = { 'hut-b': [10, -42], 'house-big': [11, -62], cottage: [15, -49], stonehouse: [12, -45] }; // chimney top relative to the anchor, measured from the art
 const BIRD = { body: '#733e39', head: '#3e2731', beak: '#feae34', wing: '#b86f50' };
 
 function viewRect(margin = 0) {
