@@ -100,6 +100,7 @@ function lifeHourly(w) {
       if (was === 'child') {
         addThought(th, w, 'grew_up');
         remember(th, w, 'Grew up');
+        inheritSkills(th, w);
         memorize(th, w, 'Grew up', 0);
         raiseAlert(w, `${th.name} has grown up`, th.x, th.y, [th.id], true);
       } else if (stage === 'elder') {

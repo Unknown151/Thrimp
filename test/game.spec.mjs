@@ -322,6 +322,7 @@ test('a saved colony comes back identical and keeps living', async ({ page }) =>
     const look = x => ({
       place: x.placeName, time: x.time, stock: JSON.stringify(x.stock), huts: x.buildings.length, sites: x.sites.length,
       trees: x.trees.map(t => `${t.x},${t.y},${t.stump}`).join(';'), waterT: x.waterT, weather: JSON.stringify(x.weather),
+      knowledge: JSON.stringify(x.knowledge), outcrops: JSON.stringify(x.outcrops), knows: x.thrimps.map(t => t.knows.join('+')).join(';'),
       thrimps: x.thrimps.map(t => `${t.name}|${t.x.toFixed(2)}|${t.traits}|${JSON.stringify(t.opinions)}|${t.memories.length}|${t.partner}|${t.home}|${t.born}|${t.health.toFixed(4)}|${t.hair}|${t.parents}`).join(';'),
       dead: JSON.stringify(x.dead), graves: JSON.stringify(x.graves),
     });
@@ -657,7 +658,7 @@ test('a fever weakens, keeps them in bed, spreads, and passes', async ({ page })
     a.sick.severity = 0.3; a.sick.until = w.time + DAY;
     for (let i = 0; i < 200 && !b.sick; i++) spreadSickness(a, b, w);
     thrimp.run(3 * HOUR);
-    const weaker = a.health < 1, inBed = !!(a.job && a.job.type === 'sleep');
+    const weaker = a.health < 1, inBed = !!(a.job && (a.job.type === 'sleep' || a.job.type === 'eat')); // up only to eat
     thrimp.run(DAY);
     return { spread: !!b.sick || b.immuneUntil > 0, weaker, inBed, over: !a.sick && a.immuneUntil > w.time, recovered: a.thoughts.some(t => t.id === 'recovered') };
   });
@@ -695,6 +696,8 @@ const PROJECT_HELPERS = `
   const w = thrimp.world;
   const failed = [];
   const idea = type => { // three tries, as the colony would over a few hours when a spot is hard to find
+    const already = w.sites.find(s => s.type === type); // the colony may have started it on its own meanwhile
+    if (already) return already;
     for (let k = 0; k < 3; k++) { const i = PROJECTS[type].want(w), s = i && startProject(w, type, i); if (s) return s; }
     failed.push(type);
     return null;
@@ -776,6 +779,63 @@ test('a campfire gathers people in the evening', async ({ page }) => {
   })()`);
   expect(r.fire).toBe(true);
   expect(r.most).toBeGreaterThanOrEqual(3);
+  expect(errors).toEqual([]);
+});
+
+test('logs piling up get someone to invent sawing; it spreads, and the sawmill turns logs into planks', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(PROJECT_HELPERS + `(() => {
+    const quiet = !knowersOf(w, 'sawing').length && !PROJECTS.sawmill.want(w);
+    w.time += 5 * DAY; w.stock.wood = 80; // settled in, and logs piling up
+    const thinker = w.thrimps.find(t => t.stage === 'adult');
+    thinker.traits = ['curious', 'hard-working'];
+    for (let k = 0; k < 400 && !knowersOf(w, 'sawing').length; k++) craftsHourly(w);
+    const inventor = knowersOf(w, 'sawing')[0];
+    const pupil = w.thrimps.find(t => t.stage === 'adult' && !knows(t, 'sawing'));
+    for (let k = 0; k < 200 && !knows(pupil, 'sawing'); k++) teachSkills(inventor, pupil, w);
+    const mill = done(idea('sawmill'));
+    w.stock.wood = 80; w.stock.planks = 0;
+    const to = Math.floor(w.time / DAY) * DAY + DAY + 9 * HOUR; // the next working day
+    while (w.time < to) thrimp.run(30);
+    for (let m = 0; m < 6 * HOUR && w.stock.planks === 0; m += 10) thrimp.run(10);
+    return { failed, quiet, invented: !!inventor && w.knowledge.sawing && w.knowledge.sawing.by === inventor.id,
+      taught: knows(pupil, 'sawing'), mill: !!mill, planks: w.stock.planks > 0 };
+  })()`);
+  expect(r).toEqual({ failed: [], quiet: true, invented: true, taught: true, mill: true, planks: true });
+  expect(errors).toEqual([]);
+});
+
+test('a quarry cuts stone; homes are upgraded in place to cottages and stone houses; the canteen grows', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(PROJECT_HELPERS + `(() => {
+    const [a, b] = w.thrimps.filter(t => t.stage === 'adult');
+    learn(a, w, 'sawing'); learn(b, w, 'quarrying');
+    done(idea('sawmill'));
+    const quarry = done(idea('quarry')), rock = quarry && outcropById(w, quarry.outcrop);
+    const before = rock ? rock.stone : 0;
+    // Stone: b cuts a few loads.
+    for (let k = 0; k < 3 && rock; k++) {
+      if (b.job) finishJob(b, w, true);
+      startJob(b, w, makeQuarryJob(b, w), 'quarry');
+      for (let m = 0; m < 3 * HOUR && b.job && b.job.type === 'quarry'; m += 5) thrimp.run(5);
+    }
+    const cut = !!rock && rock.stone < before && w.stock.stone > 0;
+    // A hut with a couple in it becomes a cottage, then a stone house: the same building, the same people.
+    w.stock.planks = 40; w.stock.stone = 40;
+    const cottage = done(idea('cottage'));
+    const home = cottage && w.buildings.find(x => x.type === 'cottage');
+    const people = home ? residentsOf(w, home).map(t => t.id).join() : '';
+    if (home) home.upgradedDay -= 5; w.lastUpgrade = -1e9; // lived in for a while
+    done(idea('stonehouse'));
+    const stone = home && home.type === 'stonehouse' && residentsOf(w, home).map(t => t.id).join() === people;
+    // The canteen: six tables full and people still eating standing, so it's extended.
+    for (let k = w.tables.length; k < 6; k++) { const p = chooseTableSpot(w); if (p) { claimGround(w, p); addTable(w, p.x, p.y); } }
+    w.standingMeals = 10;
+    done(idea('bigcanteen'));
+    const tables = w.tables.length; // (in a cramped village there may be no room for more tables)
+    return { failed, cut, upgraded: !!home, stone, canteen: w.canteen.art === 'canteen-big' && tablesAllowed(w) === 10 && tables >= 6 };
+  })()`);
+  expect(r).toEqual({ failed: [], cut: true, upgraded: true, stone: true, canteen: true });
   expect(errors).toEqual([]);
 });
 

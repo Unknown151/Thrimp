@@ -54,9 +54,28 @@ function drawThrimp(th, alpha) {
         ctx.fillStyle = P.berry[0]; ctx.fillRect(hx, hy, 3, 2);
         ctx.fillStyle = P.berry[1]; ctx.fillRect(hx, hy, 1, 1); ctx.fillRect(hx + 2, hy, 1, 1);
       }
-    } else {
-      blit(sprites.log, x, y - height + 2 - bob); // balanced on the head, clear of the face
-    }
+    } else if (th.carrying.kind === 'planks') drawPlanks(x - 4, y - height + 1 - bob);
+    else if (th.carrying.kind === 'stone') drawStone(x - 2, y - Math.round(height * 0.4) - bob);
+    else blit(sprites.log, x, y - height + 2 - bob); // balanced on the head, clear of the face
+  }
+}
+// Small loads drawn by hand: a bundle of planks (carried on the head) and a block of stone (held in front).
+function drawPlanks(x, y) {
+  ctx.fillStyle = P.outline; ctx.fillRect(x - 1, y - 1, 10, 4);
+  ctx.fillStyle = P.dirt[3]; ctx.fillRect(x, y, 8, 1); ctx.fillRect(x, y + 2, 8, 1);
+  ctx.fillStyle = P.dirt[2]; ctx.fillRect(x, y + 1, 8, 1);
+}
+function drawStone(x, y) {
+  ctx.fillStyle = P.outline; ctx.fillRect(x - 1, y - 1, 6, 5);
+  ctx.fillStyle = '#8b9bb4'; ctx.fillRect(x, y, 4, 3);
+  ctx.fillStyle = '#c0cbdc'; ctx.fillRect(x, y, 3, 1);
+}
+// Stock piled up where it's made: planks by the sawmill, cut stone by the quarry (one stack per few).
+function drawStockpile(b) {
+  const planks = b.type === 'sawmill', n = Math.min(8, Math.ceil((planks ? world.stock.planks : world.stock.stone) / 5));
+  for (let i = 0; i < n; i++) {
+    const col = i % 4, row = Math.floor(i / 4), x = Math.round(b.x + b.w / 2 + 4 + col * (planks ? 3 : 6)), y = Math.round(b.y - 2 - row * 4);
+    if (planks) drawPlanks(x - 2, y - 2); else drawStone(x, y - 3);
   }
 }
 // The lumberyard's stock as two little pyramids of logs (3-2-1, ends facing us), beside the chopping block.
@@ -83,7 +102,8 @@ function drawWoodpile(b) {
 const siteArt = s => siteType(s) === 'hut' ? art(SITE_STAGES[siteStage(s)]) : art(s.p.look || BUILDING_TYPES[siteType(s)].art[0]);
 // A building going up, with the delivered logs stacked beside it.
 function drawSite(s) {
-  const look = siteArt(s);
+  const look = siteArt(s), old = s.upgradeOf && world.byId.get(s.upgradeOf);
+  if (old && art(old.art)) blit(art(old.art), old.x, old.y); // an upgrade rises over the old building
   if (!look) { ctx.fillStyle = P.dirt[1]; ctx.fillRect(s.p.x - s.p.w / 2, s.p.y - s.p.h, s.p.w, s.p.h); }
   else if (siteType(s) === 'hut') blit(look, s.p.x, s.p.y);
   else {
@@ -172,13 +192,22 @@ function render(alpha) {
       list.push({ y: b.y, draw: () => drawWoodpile(b) });
     } else {
       const s = art(b.art) || sprites[b.type];
-      if (!s) continue; // art not loaded (yet)
-      list.push({ y: b.y, draw: () => { blit(s, b.x, b.y); if (b.type === 'campfire') drawFlames(b); } });
+      if (!s || world.sites.some(x => x.upgradeOf === b.id)) continue; // no art yet, or being rebuilt (the site draws it)
+      list.push({ y: b.y, draw: () => {
+        blit(s, b.x, b.y);
+        if (b.type === 'campfire') drawFlames(b);
+        if (b.type === 'sawmill' || b.type === 'quarry') drawStockpile(b);
+      } });
     }
   }
   for (const s of world.sites) {
     if (!inView(s.p.x, s.p.y)) continue;
     list.push({ y: s.p.y, draw: () => drawSite(s) });
+  }
+  for (const o of world.outcrops || []) { // worked out, an outcrop is just a few rocks
+    if (!inView(o.x, o.y)) continue;
+    const s = o.stone >= 2 ? art(o.art) : art('rocks');
+    if (s) list.push({ y: o.y, draw: () => blit(s, o.x, o.y) });
   }
   for (const g of world.graves) {
     if (!inView(g.x, g.y)) continue;

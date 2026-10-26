@@ -51,7 +51,7 @@ function dirFromVec(dx, dy) { return DIRS[(Math.round(Math.atan2(dy, dx) / (Math
 const eat = (th, amount) => { th.needs.food = Math.min(1, th.needs.food + amount); };
 function deposit(world, th) {
   if (!th.carrying) return;
-  world.stock[th.carrying.kind === 'food' ? 'food' : 'wood'] += th.carrying.amount;
+  world.stock[th.carrying.kind] = (world.stock[th.carrying.kind] || 0) + th.carrying.amount; // food, wood, planks, stone
   th.carrying = null;
 }
 const freeSeats = world => world.seats.filter(s => !s.takenBy && !s.table.broken);
@@ -321,7 +321,7 @@ const ACTIONS = [
   { id: 'sleep', make: makeSleepJob, score(th, w) {
     const r = th.needs.rest;
     if (isSleepTime(th, hourOf(w.time))) return 0.95 + (1 - r) * 0.3;
-    if (th.sick) return 0.9; // a fever keeps them in bed
+    if (th.sick) return 1; // a fever keeps them in bed: over courting or mourning, but not over real hunger
     return r < 0.2 ? 1.15 - r : 0;
   } },
   { id: 'mourn', make: makeMournJob, score: (th, w) => th.mourn.length && !isSleepTime(th, hourOf(w.time)) ? 0.95 : 0 },
@@ -360,6 +360,18 @@ const ACTIONS = [
     if (!isWorkTime(th, hourOf(w.time))) return 0;
     const need = clamp(1 - w.stock.wood / 40, 0, 1); // wood only goes to repairs so far: keep the stockpile modest
     return (0.18 + 0.35 * need) * th.likes.chop * workDrive(th);
+  } },
+  // Skilled work (crafts.js): only those who know how, and only once the workplace stands.
+  { id: 'saw', make: makeSawJob, score(th, w) {
+    // Enough planks stacked (60), and the sawyers go back to other work.
+    if (!isWorkTime(th, hourOf(w.time)) || !knows(th, 'sawing') || w.stock.wood < 4 || w.stock.planks >= 60 || !buildingOf(w, 'sawmill')) return 0;
+    const need = clamp(1 - w.stock.planks / 30, 0, 1);
+    return (0.2 + 0.45 * need) * th.likes.saw * workDrive(th);
+  } },
+  { id: 'quarry', make: makeQuarryJob, score(th, w) {
+    if (!isWorkTime(th, hourOf(w.time)) || !knows(th, 'quarrying') || w.stock.stone >= 60 || !buildingOf(w, 'quarry')) return 0;
+    const need = clamp(1 - w.stock.stone / 30, 0, 1);
+    return (0.2 + 0.45 * need) * th.likes.quarry * workDrive(th);
   } },
   { id: 'relax', make: makeRelaxJob, score(th, w) {
     const s = (1 - th.needs.fun) * 0.75 * traitMult(th, 'relax');
@@ -468,6 +480,7 @@ function tick(w) {
     updateWeather(w);
     lifeHourly(w);
     projectsHourly(w);
+    craftsHourly(w);
   }
   for (const th of w.thrimps) updateThrimp(th, w, dt);
   separateThrimps(w);

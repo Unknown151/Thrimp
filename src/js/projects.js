@@ -6,7 +6,6 @@
 const hasBuilt = (w, type) => w.buildings.some(b => b.type === type) || w.sites.some(s => s.type === type);
 const buildingOf = (w, type) => w.buildings.find(b => b.type === type) || null;
 const grownUps = w => w.thrimps.filter(t => t.stage !== 'child');
-const MAX_TABLES = 6;
 
 // want(w): null, or { urgency, owner, near } for the best version of this idea right now.
 const PROJECTS = {
@@ -22,7 +21,8 @@ const PROJECTS = {
     return null;
   } },
   table: { what: 'a canteen table', wood: 6, work: 2 * HOUR, want(w) {
-    if (w.tables.length + w.sites.filter(s => s.type === 'table').length >= MAX_TABLES || (w.standingMeals || 0) < 6) return null;
+    // Six tables fit in front of the old canteen; the bigger canteen (crafts.js) makes room for ten.
+    if (w.tables.length + w.sites.filter(s => s.type === 'table').length >= tablesAllowed(w) || (w.standingMeals || 0) < 6) return null;
     const owner = w.thrimps.filter(t => t.stage !== 'child' && t.thoughts.some(x => x.id === 'ate_standing'))[0] || pick(grownUps(w));
     return owner && { urgency: 0.7, owners: [owner] };
   } },
@@ -78,8 +78,10 @@ function planProjects(w) {
 // Someone has the idea, picks a spot and the site starts (or nothing happens if there's no room for it).
 function startProject(w, type, idea) {
   const P = PROJECTS[type], [owner] = idea.owners;
-  const site = startSite(w, idea.owners, P.what, type, idea.near || null);
+  const site = idea.upgrade ? startUpgrade(w, idea.owners, P.what, type, idea.upgrade)
+    : startSite(w, idea.owners, P.what, type, idea.near || null);
   if (!site) return null;
+  if (idea.outcrop) site.outcrop = idea.outcrop; // a quarry works the rock it was built beside
   if (type === 'table') w.standingMeals = 0;
   emote(owner, w, 'idea', 30);
   memorize(owner, w, `Had the idea to build ${P.what}`, 0);
@@ -95,7 +97,7 @@ function finishProject(w, site, owners, b) {
 // A spot for one more table: in rows out in front of the canteen, clear of everything, 40 px from the others.
 function chooseTableSpot(w) {
   const c = w.canteen, ty = c.y + 26;
-  for (const row of [0, 1, 2]) for (const dx of [-90, 90, -30, 30, -150, 150]) {
+  for (const row of [0, 1, 2, 3]) for (const dx of [-90, 90, -30, 30, -150, 150, -210, 210]) {
     const x = Math.round(c.x + dx), y = Math.round(ty + row * 34);
     if (w.tables.some(t => dist(t.x, t.y, x, y) < 40) || w.sites.some(s => dist(s.p.x, s.p.y, x, y) < 40)) continue;
     const rect = { x0: x - 20, x1: x + 20, y0: y - 18, y1: y + 8 };

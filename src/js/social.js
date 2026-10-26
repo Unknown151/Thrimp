@@ -141,6 +141,7 @@ function chat(a, b, w) {
     addThought(x, w, gain < -1.5 ? 'awkward_chat' : 'nice_chat');
     emote(x, w, gain < -1.5 ? 'anger' : 'chat', 15);
   }
+  teachSkills(a, b, w); // and now and then, how to saw a plank or cut a stone (crafts.js)
   // Gossip: a passes on what they think of someone else, and b's view drifts toward it.
   const others = Object.keys(a.opinions).map(Number).filter(id => id !== b.id && Math.abs(a.opinions[id]) >= 30);
   if (others.length && chance(0.35)) {
