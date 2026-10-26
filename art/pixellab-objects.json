@@ -27,5 +27,12 @@
   "hut-stage-2": "8e4f7f66-9a7f-4151-9244-6626c7979776",
   "hut-stage-3": "abb5ecd8-b0d8-43d6-ab4e-ec79bef7bdad",
   "grave": "14079c4c-8068-45c6-88e1-539314eb6e8e",
-  "grave-old": "9473ba65-6512-4467-808a-a1fe5f1061f5"
+  "grave-old": "9473ba65-6512-4467-808a-a1fe5f1061f5",
+  "house-big": "1676ff4f-9ca9-4feb-9565-8a29e6f17a1d",
+  "campfire": "b249397f-3f3a-4a94-b6fa-b7185ee47750",
+  "shelter": "8ee247d1-98e7-4230-8c10-04299109e151",
+  "storehouse": "46d84f87-7e20-4850-b5f4-e0abf400ee53",
+  "healer-hut": "d94a4729-6a72-4f23-9c89-30c58aa44af0",
+  "memorial": "798c0a80-8cdd-4f97-b221-2ab0f11e5ba4",
+  "playground": "928734f5-1187-4669-88dd-e59cb6f5b4c9"
 }

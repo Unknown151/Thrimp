@@ -44,14 +44,16 @@ function checkPlacement(world, type, x, y, side = 12, front = 18) {
       if (isWater(world, xx, yy) || world.solid[Math.floor(yy / CONFIG.CELL) * world.gw + Math.floor(xx / CONFIG.CELL)]) return null;
   return { type, x, y, w, h, look, rect };
 }
+// Buildings block the walk grid unless marked otherwise; a new canteen table (not a building) never does.
+const isSolidType = type => !!BUILDING_TYPES[type] && BUILDING_TYPES[type].solid !== false;
 function claimGround(world, p) {
   world.noBuild.push(p.rect);
-  markSolid(world, p.x - p.w / 2, p.y - p.h, p.x + p.w / 2 - 1, p.y - 1);
+  if (isSolidType(p.type)) markSolid(world, p.x - p.w / 2, p.y - p.h, p.x + p.w / 2 - 1, p.y - 1);
 }
 function releaseGround(world, p) {
   const same = (a, b) => a.x0 === b.x0 && a.x1 === b.x1 && a.y0 === b.y0 && a.y1 === b.y1; // by value: survives a save
   world.noBuild = world.noBuild.filter(r => !same(r, p.rect));
-  markSolid(world, p.x - p.w / 2, p.y - p.h, p.x + p.w / 2 - 1, p.y - 1, 0); // checkPlacement made sure nothing else was there
+  if (isSolidType(p.type)) markSolid(world, p.x - p.w / 2, p.y - p.h, p.x + p.w / 2 - 1, p.y - 1, 0); // checkPlacement made sure nothing else was there
 }
 function addBuilding(world, p) {
   const T = BUILDING_TYPES[p.type];
@@ -61,6 +63,15 @@ function addBuilding(world, p) {
   world.byId.set(b.id, b);
   world.dirtSpots.push({ x: p.x, y: p.y + 7, rx: 10, ry: 6, building: b.id });
   return b;
+}
+// A canteen table, seen end-on with a bench either side and one more seat at the far end.
+function addTable(world, tx, ty) {
+  const table = { x: tx, y: ty, broken: false };
+  world.tables.push(table);
+  world.seats.push({ x: tx - 13, y: ty - 2, face: 'east', takenBy: 0, table });
+  world.seats.push({ x: tx + 13, y: ty - 2, face: 'west', takenBy: 0, table });
+  world.seats.push({ x: tx, y: ty - 14, face: 'south', takenBy: 0, table });
+  return table;
 }
 function placeBuilding(world, type, x, y, side, front) {
   const p = checkPlacement(world, type, x, y, side, front);
@@ -117,14 +128,7 @@ function tryGenerateWorld() {
   if (!canteen) return null;
   world.canteen = canteen;
   const ty = canteen.y + 26;
-  for (const tx of [canteen.x - 30, canteen.x + 30]) {
-    const table = { x: tx, y: ty, broken: false };
-    world.tables.push(table);
-    // The table is seen end-on with a bench either side; one more seat at the far end.
-    world.seats.push({ x: tx - 13, y: ty - 2, face: 'east', takenBy: 0, table });
-    world.seats.push({ x: tx + 13, y: ty - 2, face: 'west', takenBy: 0, table });
-    world.seats.push({ x: tx, y: ty - 14, face: 'south', takenBy: 0, table });
-  }
+  for (const tx of [canteen.x - 30, canteen.x + 30]) addTable(world, tx, ty);
   world.dirtSpots.push({ x: canteen.x, y: ty, rx: 46, ry: 16 });
   world.crate = { x: canteen.x + canteen.w / 2 + 14, y: canteen.y + 4, broken: false };
   world.store = { x: world.crate.x, y: world.crate.y + 7 };

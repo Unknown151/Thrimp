@@ -1,24 +1,32 @@
 // ============================================================
-// CONSTRUCTION: Thrimps decide on their own where to build, haul wood there and raise huts in stages.
-// The player never places buildings.
+// CONSTRUCTION: Thrimps decide on their own where to build, haul wood there and raise buildings in stages.
+// The player never places buildings. Homes are planned here; everything else (a campfire, a storehouse...) starts as
+// someone's idea in projects.js and is built the same way.
 // ============================================================
 const HUT_WOOD = 12;            // logs a hut takes
 const HUT_WORK = 6 * HOUR;      // labour a hut takes, shared by whoever helps
 const BUILD_CHUNK = 40;         // minutes of building per stint
-const MAX_SITES = 2;            // at most this many huts going up at once
+const MAX_SITES = 3;            // at most this many things going up at once
 const SITE_STAGES = ['hut-stage-1', 'hut-stage-2', 'hut-stage-3'];
 
-const siteStage = s => Math.min(SITE_STAGES.length - 1, Math.floor(s.work / HUT_WORK * SITE_STAGES.length));
-const woodNeededFor = work => Math.ceil(work / HUT_WORK * HUT_WOOD);
+// What a site takes: huts use the constants above, other types their PROJECTS entry (projects.js).
+const siteType = s => s.type || 'hut';
+const siteWood = s => siteType(s) === 'hut' ? HUT_WOOD : PROJECTS[siteType(s)].wood;
+const siteWork = s => siteType(s) === 'hut' ? HUT_WORK : PROJECTS[siteType(s)].work;
+const siteWhat = s => s.what || 'a hut';
+const siteStage = s => Math.min(SITE_STAGES.length - 1, Math.floor(s.work / siteWork(s) * SITE_STAGES.length));
+const woodNeededFor = (s, work) => Math.ceil(work / siteWork(s) * siteWood(s));
 // Labour can only run as far as the wood already delivered allows.
-const workAllowed = s => Math.min(HUT_WORK, s.woodIn / HUT_WOOD * HUT_WORK);
+const workAllowed = s => Math.min(siteWork(s), s.woodIn / siteWood(s) * siteWork(s));
+const residentsOf = (w, b) => w.thrimps.filter(t => t.home === b.id);
 
-// Runs hourly. Who needs a home of their own? Couples living apart, and anyone without a home at all.
+// Runs hourly. Who needs a home of their own? Couples living apart, anyone without a home at all, and families who
+// have outgrown theirs. Then, if there's still room, one of the colony's ideas (projects.js).
 function planBuilding(w) {
   const busy = th => w.sites.some(s => s.owners.includes(th.id));
   const apart = th => { const p = th.partner && byId(w, th.partner); return p && p.home !== th.home; };
-  // A hut whose people have all died stands empty: the homeless, or a couple living apart, move in before building.
-  for (const hut of w.buildings.filter(b => b.type === 'hut' && !w.thrimps.some(t => t.home === b.id))) {
+  // A home whose people have all died stands empty: the homeless, or a couple living apart, move in before building.
+  for (const hut of w.buildings.filter(b => BUILDING_TYPES[b.type].home && !residentsOf(w, b).length)) {
     const th = w.thrimps.find(t => t.stage !== 'child' && !busy(t) && (!t.home || apart(t)));
     if (!th) break;
     const p = th.partner && byId(w, th.partner);
@@ -36,6 +44,7 @@ function planBuilding(w) {
       startSite(w, mate ? [th, mate] : [th], mate ? `a home to share with ${mate.name}` : 'a home of their own');
     }
   }
+  if (w.sites.length < MAX_SITES) planProjects(w);
 }
 
 // Score candidate spots by what the owners care about: near work, near friends, far from rivals, a view of the water,
@@ -57,19 +66,22 @@ function siteScore(w, p, owners) {
   if (w.shoreSpots.some(sp => dist(sp.x, sp.y, p.x, p.y) < 110)) s += 0.3;
   return s;
 }
-function chooseSite(w, owners) {
+// A home goes where its owners like it; anything else near its anchor (`near`: { x, y, r0, r1 }).
+function chooseSite(w, owners, type = 'hut', near = null) {
   let best = null, bestScore = -Infinity;
-  for (let i = 0; i < 90; i++) {
-    const ang = rand() * Math.PI * 2, r = randRange(110, 430);
-    const p = checkPlacement(w, 'hut', w.canteen.x + Math.cos(ang) * r * 1.3, w.canteen.y + Math.sin(ang) * r * 0.85);
+  const small = BUILDING_TYPES[type].w < 30;
+  for (let i = 0; i < 150 && !(best && i >= 90); i++) {
+    const ang = rand() * Math.PI * 2, wider = i >= 90 ? 1.8 : 1; // nothing near enough? look a little further out
+    const c = near || { x: w.canteen.x, y: w.canteen.y, r0: 110, r1: 430 }, r = randRange(c.r0, c.r1 * wider);
+    const p = checkPlacement(w, type, c.x + Math.cos(ang) * r * 1.3, c.y + Math.sin(ang) * r * 0.85, small ? 8 : 12, small ? 12 : 18);
     if (!p) continue;
-    const s = siteScore(w, p, owners);
+    const s = near ? -dist(p.x, p.y, c.x, c.y) / 100 + rand() * 0.3 : siteScore(w, p, owners);
     if (s > bestScore) { bestScore = s; best = p; }
   }
   return best;
 }
-function startSite(w, owners, what) {
-  const p = chooseSite(w, owners);
+function startSite(w, owners, what, type = 'hut', near = null) {
+  const p = type === 'table' ? chooseTableSpot(w) : chooseSite(w, owners, type, near);
   if (!p) return null;
   claimGround(w, p);
   rebuildPaths(w);
@@ -79,7 +91,7 @@ function startSite(w, owners, what) {
     rebuildPaths(w);
     return null;
   }
-  const site = { id: w.nextId++, p, owners: owners.map(o => o.id), woodIn: 0, work: 0, started: w.time, door: { x: p.x, y: p.y + 5 } };
+  const site = { id: w.nextId++, type, what, p, owners: owners.map(o => o.id), woodIn: 0, work: 0, started: w.time, door: { x: p.x, y: p.y + 5 } };
   w.sites.push(site);
   for (const o of owners) { remember(o, w, `Started building ${what}`); memorize(o, w, `Picked a spot and started building ${what}`, 0); }
   return site;
@@ -92,16 +104,16 @@ function rebuildPaths(w) {
 
 // One stint: fetch logs if the site is short, then build as far as the delivered wood allows.
 function makeBuildJob(th, w) {
-  const open = w.sites.filter(s => s.work < HUT_WORK);
+  const open = w.sites.filter(s => s.work < siteWork(s));
   if (!open.length) return null;
   const site = open.find(s => s.owners.includes(th.id)) || open.sort((a, b) => dist(a.p.x, a.p.y, th.x, th.y) - dist(b.p.x, b.p.y, th.x, th.y))[0];
   const side = chance(0.5) ? -1 : 1, spot = { x: site.p.x + side * (site.p.w / 2 + 8), y: site.p.y + 3 };
   const steps = [];
-  const short = site.woodIn < Math.min(HUT_WOOD, woodNeededFor(site.work + BUILD_CHUNK));
+  const short = site.woodIn < Math.min(siteWood(site), woodNeededFor(site, site.work + BUILD_CHUNK));
   if (short) {
     if (!w.lumberyard || w.stock.wood < 2) return null;
     steps.push(
-      goTo(w.lumberyard.drop.x + randRange(-6, 6), w.lumberyard.drop.y + 2, 'Fetching logs for the new hut'),
+      goTo(w.lumberyard.drop.x + randRange(-6, 6), w.lumberyard.drop.y + 2, `Fetching logs for ${siteWhat(site)}`),
       act(3, 'Picking up logs', { begin: t => { if (w.stock.wood < 2) return 'fail'; w.stock.wood -= 2; t.carrying = { kind: 'wood', amount: 2 }; } }),
       goTo(spot.x, spot.y, 'Carrying logs to the building site'),
       act(3, 'Dropping off logs', { finish: t => { if (t.carrying && t.carrying.kind === 'wood') { site.woodIn += t.carrying.amount; t.carrying = null; } } }),
@@ -113,28 +125,43 @@ function makeBuildJob(th, w) {
     begin: t => { if (workAllowed(site) <= site.work) return 'fail'; t.dir = side < 0 ? 'east' : 'west'; t.working = 'chop'; },
     each: (t, w2, dt) => {
       site.work = Math.min(workAllowed(site), site.work + dt * (t.inspiration ? 1.5 : 1));
-      if (site.work >= HUT_WORK) return 'done';
+      if (site.work >= siteWork(site)) return 'done';
       if (site.work >= workAllowed(site)) return 'done'; // out of wood for now
     },
-    finish: t => { afterWork(t, w); if (site.work >= HUT_WORK && w.sites.includes(site)) completeSite(w, site); },
+    finish: t => { afterWork(t, w); if (site.work >= siteWork(site) && w.sites.includes(site)) completeSite(w, site); },
     end: t => { t.working = false; },
   }));
-  return job(site.owners.includes(th.id) ? 'Building their new home' : 'Helping build a hut', steps);
+  const homeType = BUILDING_TYPES[siteType(site)] && BUILDING_TYPES[siteType(site)].home;
+  return job(site.owners.includes(th.id) ? (homeType ? 'Building their new home' : `Building ${siteWhat(site)}`) : `Helping build ${siteWhat(site)}`, steps);
 }
 
 function completeSite(w, site) {
   w.sites = w.sites.filter(s => s !== site);
-  const hut = addBuilding(w, site.p);
-  hut.label = `Hut ${w.buildings.filter(b => b.type === 'hut').length}`;
-  Object.assign(hut, { builtDay: dayOf(w.time), builtBy: site.owners, fromSite: site.id }); // for the hut's info panel
   const owners = site.owners.map(id => byId(w, id)).filter(Boolean);
-  for (const o of owners) {
-    o.home = hut.id;
-    addThought(o, w, 'built_home');
-    const partner = owners.find(x => x !== o);
-    memorize(o, w, partner ? `Finished building a home with ${partner.name}` : 'Finished building a home', partner ? partner.id : 0);
-    remember(o, w, `Moved into ${hut.label}`);
+  if (siteType(site) === 'table') { // a table is furniture, not a building: it joins the canteen's (its ground stays claimed)
+    addTable(w, site.p.x, site.p.y);
+    finishProject(w, site, owners, null);
+    return;
   }
-  for (let k = 0; k < 6; k++) stampTrail(w, hut.door.x + randRange(-6, 6), hut.door.y + randRange(0, 8), 0.4); // a fresh doorstep
-  w.stats.huts_built = (w.stats.huts_built || 0) + 1;
+  const b = addBuilding(w, site.p);
+  const T = BUILDING_TYPES[b.type];
+  if (T.home) b.label = `${T.label} ${w.buildings.filter(x => x.type === b.type).length}`;
+  Object.assign(b, { builtDay: dayOf(w.time), builtBy: site.owners, fromSite: site.id }); // for the info panel
+  if (T.home) {
+    // The owners move in, and into a family house their children who lived with them come along.
+    const old = owners[0] && owners[0].home;
+    const kids = b.type === 'house' ? w.thrimps.filter(t => t.home === old && t.stage === 'child' && owners.some(o => t.parents.includes(o.id))) : [];
+    for (const o of [...owners, ...kids]) {
+      o.home = b.id;
+      if (owners.includes(o)) addThought(o, w, 'built_home');
+      remember(o, w, `Moved into ${b.label}`);
+    }
+    for (const o of owners) {
+      const partner = owners.find(x => x !== o);
+      memorize(o, w, partner ? `Finished building a home with ${partner.name}` : 'Finished building a home', partner ? partner.id : 0);
+    }
+    if (b.type === 'hut') w.stats.huts_built = (w.stats.huts_built || 0) + 1;
+    else finishProject(w, site, owners, b);
+  } else finishProject(w, site, owners, b);
+  for (let k = 0; k < 6; k++) stampTrail(w, b.door.x + randRange(-6, 6), b.door.y + randRange(0, 8), 0.4); // a fresh doorstep
 }

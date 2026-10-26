@@ -79,13 +79,36 @@ function drawWoodpile(b) {
   }
   blit(block || sprites.block, b.x + 26, b.y + 2);
 }
-// A hut going up: the stage art for how far along it is, with the delivered logs stacked beside it.
+// What a site looks like: a hut by its stage art; anything else is its finished art, rising from the ground.
+const siteArt = s => siteType(s) === 'hut' ? art(SITE_STAGES[siteStage(s)]) : art(s.p.look || BUILDING_TYPES[siteType(s)].art[0]);
+// A building going up, with the delivered logs stacked beside it.
 function drawSite(s) {
-  const stage = art(SITE_STAGES[siteStage(s)]);
-  if (stage) blit(stage, s.p.x, s.p.y);
-  else { ctx.fillStyle = P.dirt[1]; ctx.fillRect(s.p.x - s.p.w / 2, s.p.y - s.p.h, s.p.w, s.p.h); }
-  const unused = Math.max(0, Math.round(s.woodIn - woodNeededFor(s.work)));
+  const look = siteArt(s);
+  if (!look) { ctx.fillStyle = P.dirt[1]; ctx.fillRect(s.p.x - s.p.w / 2, s.p.y - s.p.h, s.p.w, s.p.h); }
+  else if (siteType(s) === 'hut') blit(look, s.p.x, s.p.y);
+  else {
+    // Only the bottom rows so far, plus two scaffold poles a little taller than the work.
+    const frac = Math.max(0.12, s.work / siteWork(s)), full = look.ay - (look.top || 0) + 1, vis = Math.round(full * frac);
+    const x = Math.round(s.p.x) - look.ax, y = Math.round(s.p.y) - look.ay, y0 = look.ay + 1 - vis;
+    ctx.drawImage(look.img, 0, y0, look.img.width, vis, x, y + y0, look.img.width, vis);
+    ctx.fillStyle = P.dirt[0];
+    const half = Math.round((look.width || 20) / 2) - 2, top = Math.round(s.p.y) - Math.min(full, vis + 6);
+    for (const px of [s.p.x - half, s.p.x + half - 1]) ctx.fillRect(Math.round(px), top, 1, Math.round(s.p.y) - top);
+  }
+  const unused = Math.max(0, Math.round(s.woodIn - woodNeededFor(s, s.work)));
   for (let i = 0; i < Math.min(6, unused); i++) blit(sprites.log, s.p.x + s.p.w / 2 + 6, s.p.y - i * 3);
+}
+// The campfire is lit in the evening: a few flickering pixels of flame over its logs.
+const fireLit = () => { const h = hourOf(world.time); return h >= 17.5 && h < 23.5; };
+function drawFlames(b) {
+  if (!fireLit()) return;
+  const t = Math.floor(amb.t * 8);
+  const cols = [P.light[0], P.light[1], P.light[2]];
+  for (let i = 0; i < 6; i++) {
+    const k = (t + i * 7) % 5, x = Math.round(b.x) - 2 + (i % 4), y = Math.round(b.y) - 6 - k;
+    ctx.fillStyle = cols[(i + t) % 3];
+    ctx.fillRect(x, y, 1, 1 + (k < 2 ? 1 : 0));
+  }
 }
 // A fresh grave is bare earth with flowers; after a few days the grass has grown over it.
 const graveArt = g => art(dayOf(world.time) - g.day >= 4 ? 'grave-old' : 'grave') || art('grave');
@@ -149,7 +172,8 @@ function render(alpha) {
       list.push({ y: b.y, draw: () => drawWoodpile(b) });
     } else {
       const s = art(b.art) || sprites[b.type];
-      list.push({ y: b.y, draw: () => blit(s, b.x, b.y) });
+      if (!s) continue; // art not loaded (yet)
+      list.push({ y: b.y, draw: () => { blit(s, b.x, b.y); if (b.type === 'campfire') drawFlames(b); } });
     }
   }
   for (const s of world.sites) {
@@ -230,14 +254,16 @@ function drawNight(z, tx, ty) {
   // Lamplight spills out of the doorway of the canteen and of any hut with someone home in the evening.
   for (const b of world.buildings) {
     if (b.type === 'lumberyard') continue;
-    const lit = b.type === 'canteen' || (b.sleepers.length > 0 && (h >= 17 || h < 0.5) && h < 23.5);
+    const fire = b.type === 'campfire';
+    const lit = fire ? fireLit() : b.type === 'canteen' || (b.sleepers.length > 0 && (h >= 17 || h < 0.5) && h < 23.5);
     if (!lit) continue;
-    const cx = b.door.x, cy = b.door.y - 6, r = b.type === 'canteen' ? 34 : 24;
+    const cx = fire ? b.x : b.door.x, cy = fire ? b.y - 4 : b.door.y - 6;
+    const r = fire ? 46 + Math.sin(amb.t * 9) * 2 : b.type === 'canteen' ? 34 : 24; // firelight flickers
     const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
     grad.addColorStop(0, P.light[1]);
     grad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.32 * dk;
+    ctx.globalAlpha = (fire ? 0.5 : 0.32) * dk;
     ctx.fillStyle = grad;
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     ctx.globalCompositeOperation = 'source-over';

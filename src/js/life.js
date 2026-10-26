@@ -39,7 +39,7 @@ function ensureLife(th, w) {
 function updateBody(th, w, dt) {
   let d = 0;
   if (th.needs.food <= 0) d -= dt / (1.5 * DAY);                             // starving: about a day and a half
-  if (th.sick) d -= th.sick.severity * dt / DAY * (th.asleep ? 0.5 : 1);  // resting in bed halves the toll
+  if (th.sick) d -= th.sick.severity * dt / DAY * (th.inHealer ? 0.4 : th.asleep ? 0.5 : 1); // resting halves the toll, care more
   else if (th.needs.food > 0.2) d += dt / (2 * DAY);                       // wounds heal while fed
   th.health = clamp(th.health + d, 0, 1);
   if (th.health <= 0) markDead(th, w, th.needs.food <= 0 ? 'starvation' : th.sick ? 'sickness' : 'wounds');
@@ -55,6 +55,7 @@ function hurt(th, w, amount, by, cause = 'wounds') {
 function checkHealth(th, w) {
   if (th.sick) {
     if (w.time >= th.sick.until) {
+      if (th.sick.treated) addThought(th, w, 'cared_for');
       th.sick = null;
       th.immuneUntil = w.time + 10 * DAY;
       addThought(th, w, 'recovered');

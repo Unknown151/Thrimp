@@ -104,6 +104,9 @@ container, set `PW_CHROMIUM` to the pre-installed Chromium. Worlds are random, s
 | old age | past their lifespan a Thrimp dies, gets a grave and a `w.dead` record; the partner is widowed and goes to the grave |
 | fever | a fever hurts health, keeps them in bed, can spread on meeting, passes and leaves them immune |
 | murder | a violent Thrimp's murderous break kills their enemy (`killed`, with killer); friends of the victim turn on the killer |
+| tables, shelter, storehouse | quiet until their triggers; standing meals add a table (3 seats), the shelter keeps the rain off, the storehouse stops rain spoiling food; each idea is remembered by whoever had it |
+| healer, house, play area, memorial | the sick rest at the healer's (fever shortened), a crowded family moves into a house with its children, children play at the play area, the memorial goes up by the graves |
+| campfire | once built, at least three gather round it on a dry evening |
 | pacing | one game day simulates in under 1.5 s |
 
 **Pacing baseline:** one game day with 12 Thrimps takes about 55-60 ms in Edge on Rasmus's PC on a quiet day
@@ -127,7 +130,8 @@ update is under 0.1 ms.
 | `src/js/thrimp.js` | Thrimp data, needs decay, schedules, recent-activity memory, `raiseAlert` |
 | `src/js/mind.js` | `TRAITS` (+ `TRAIT_EFFECTS` for the tooltip), `THOUGHTS` (moodlets), mood, mental breaks (`BREAKS`), inspirations, repairs |
 | `src/js/social.js` | Spatial hash, opinions, chemistry, grudges, memories, `SOCIAL` encounters, fights, couples, gossip, personal space |
-| `src/js/construction.js` | Who needs a home, site choice (`siteScore`), building sites in stages, build jobs, completion |
+| `src/js/construction.js` | Who needs a home, site choice, building sites of any type in stages, build jobs, completion |
+| `src/js/projects.js` | `PROJECTS`: buildings Thrimps think up (house, table, campfire, shelter, storehouse, healer, memorial, play area), their triggers and what they do |
 | `src/js/weather.js` | `WEATHER` (clear, cloudy, rain, fog), hourly changes and wind, what the sky does to moods |
 | `src/js/life.js` | Ages and life stages, health, fever, births and inheritance, deaths, grief, graves and mourning |
 | `src/js/ai.js` | Job steps (`goTo`, `act`), job builders, utility scoring (`ACTIONS`), interrupts, `tick` |
@@ -135,7 +139,7 @@ update is under 0.1 ms.
 | `src/js/ground.js` | Paints the ground once into one big pixel canvas; remembers where the flowers are |
 | `src/js/render.js` | Canvas, camera, y-sorted drawing, night lighting, debug overlay, mood-coloured nameplates |
 | `src/js/ambience.js` | Looks-only life: butterflies, birds, fireflies, fish rings, rain, fog, cloud shadows, smoke, leaves, swaying trees, dusk light |
-| `src/js/ui.js` | HUD, inspector, things panel (huts, sites, bushes, trees), alert notices and the camera jump, trait tooltip, renaming |
+| `src/js/ui.js` | HUD, inspector, things panel (every building, sites, graves, bushes, trees), alert notices and the camera jump, trait tooltip, renaming |
 | `src/js/input.js` | Mouse, wheel, keyboard, camera movement, follow and the glide to an alert |
 | `src/js/save.js` | `serializeWorld` / `restoreWorld`, gzip, talking to the Worker, autosave, "New world" |
 | `src/js/main.js` | Fixed-step main loop, `init` (load the save or make a world), the `window.thrimp` console/test handle |
@@ -184,10 +188,25 @@ update is under 0.1 ms.
   noise has its own rng from `world.seed`, so painting never touches the sim's. When a cell's level (of 24) changes,
   the 16 px chunks it can reach are repainted, at most 40 a frame (about 1.5 ms at 12x).
 - **Building:** every world starts one hut short, so two homeless Thrimps raise the first new hut together.
-  `planBuilding` (hourly) starts sites for couples living apart and homeless singles (paired up), at most 2 at a time.
-  A site claims its ground at once (`checkPlacement` / `claimGround`), the path network is rebuilt, and the site is
-  abandoned if it would cut off any door. A hut takes 12 wood and 6 hours of work; work can't outrun delivered wood;
-  the stage art follows progress. The finished hut is added with `addBuilding`.
+  `planBuilding` (hourly) starts sites for couples living apart and homeless singles (paired up), then, if a slot is
+  free, the most urgent idea from `planProjects`; at most 3 sites at a time. A site has a `type` (old saves: hut),
+  claims its ground at once (`checkPlacement` / `claimGround`), the path network is rebuilt, and the site is abandoned
+  if it would cut off any door. A hut takes 12 wood and 6 hours of work, other types their `PROJECTS` numbers; work
+  can't outrun delivered wood. Huts show their stage art; anything else rises from the ground (only the bottom part of
+  its finished art, with two scaffold poles). `chooseSite` looks near an anchor (`near`) and wider if nothing fits.
+- **Projects** (`projects.js`): Thrimps decide what to build. Each `PROJECTS` entry's `want(w)` returns null or an
+  idea (urgency, owners, where) from what actually happened: meals eaten standing (`w.standingMeals`) give a table
+  (up to 6; tables aren't buildings and don't block walking), soaked days (`w.stats.soaked`) a rain shelter, food
+  spoiled by rain or a smashed crate a storehouse, an outbreak or a fever death a healer's hut, three deaths a
+  memorial stone by the graves, three children a play area near their homes, a hut over its `room` with a couple and
+  their children a family house, and a lonely colony (from day 2, any colony from day 4) a campfire. The owner
+  remembers having the idea; a calm notice says so. What they do: tables add seats; the campfire has 10 ring places
+  for evenings (18:00-22:30, not in rain; children until 20:00), lit and glowing 17:30-23:30; the shelter (walk-in,
+  about 8) keeps the rain off (`underShelter`); without a storehouse, rain spoils 3% an hour of food above 40, and a
+  smashed crate spoils food; the healer's hut takes in the sick (`inHealer`): 40% of the toll, and the fever 40%
+  shorter; the memorial is a place to relax that shortens grief by a quarter; the play area doubles children's fun;
+  a family house takes the parents and the children who lived with them. Homes have a `room` (hut 3, house 7) and
+  more than that gives "Home is too crowded". In 30-day test colonies everything got built, roughly in that order.
 - **Personal space:** after everyone moves, `separateThrimps` pushes apart any two visible Thrimps closer than 10 px,
   with a sideways shear so they slide round each other instead of stalling face to face. Walkers and idlers give way;
   someone busy on the spot (eating, chopping) stays put. Skipped for a walker within 14 px of its next waypoint, bends aside (so a
@@ -277,6 +296,8 @@ update is under 0.1 ms.
   of the base Thrimp keeps adult height, so `74e03353-...` "Child" isn't used). Its colours drifted pale, so its
   sheets are built with `-PaletteFrom` the adult's rotations. Children use only `child-walk` and `child-idle`.
 - Graves: objects `grave` (fresh) and `grave-old` (from 4 days on).
+- Buildings Thrimps think up: `house-big` (128 px canvas), `shelter`, `storehouse`, `healer-hut` (96), `playground`
+  (64), `memorial` (48), `campfire` (32). Their flames are partly in the art; `drawFlames` adds flicker in the evening.
 - Custom (v3) animations come back on bigger canvases that differ per direction (40 px south, 44 px east);
   `build-sheet.ps1` centres every frame in the largest size, and the loader finds the feet per direction.
 - **Objects** (buildings, trees, bushes, props) are made with `create_object_pro_flash`: `n_directions: 1`,
