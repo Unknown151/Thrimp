@@ -689,6 +689,96 @@ test('a violent Thrimp at breaking point can kill, and the colony turns on the k
   expect(errors).toEqual([]);
 });
 
+// Buildings the colony thinks up: each idea stays quiet until its trigger, and the finished building does its job.
+// `idea` asks a project whether it's wanted and starts its site; `done` finishes a site at once.
+const PROJECT_HELPERS = `
+  const w = thrimp.world;
+  const failed = [];
+  const idea = type => { // three tries, as the colony would over a few hours when a spot is hard to find
+    for (let k = 0; k < 3; k++) { const i = PROJECTS[type].want(w), s = i && startProject(w, type, i); if (s) return s; }
+    failed.push(type);
+    return null;
+  };
+  const done = s => { if (!s) return null; s.woodIn = siteWood(s); s.work = siteWork(s); completeSite(w, s); return buildingOf(w, s.type); };
+`;
+test('meals eaten standing lead to a new table, soaked days to a shelter, spoiled food to a storehouse', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(PROJECT_HELPERS + `(() => {
+    const quiet = ['table', 'shelter', 'storehouse'].every(t => !PROJECTS[t].want(w));
+    w.standingMeals = 10;
+    const tables = w.tables.length, seats = w.seats.length, t = idea('table');
+    done(t);
+    const moreSeats = w.tables.length === tables + 1 && w.seats.length === seats + 3;
+    w.stats.soaked = 20;
+    const shelter = done(idea('shelter'));
+    w.weather.kind = 'rain'; w.weather.until = w.time + 6 * HOUR;
+    const th = w.thrimps.find(x => !x.hidden && !x.asleep);
+    if (shelter) { th.x = th.px = shelter.x; th.y = th.py = shelter.y - 6; }
+    const dry = underShelter(th, w);
+    w.stats.spoiled = 20;
+    done(idea('storehouse'));
+    w.stock.food = 300;
+    projectsHourly(w);
+    return { failed, quiet, moreSeats, dry, sheltering: ACTIONS.find(a => a.id === 'shelter').score(w.thrimps.find(x => !x.hidden && !underShelter(x, w)), w) > 0,
+      keptDry: w.stock.food === 300, ideas: w.thrimps.reduce((n, x) => n + x.memories.filter(m => m.text.startsWith('Had the idea')).length, 0) };
+  })()`);
+  expect(r).toEqual({ failed: [], quiet: true, moreSeats: true, dry: true, sheltering: true, keptDry: true, ideas: 3 });
+  expect(errors).toEqual([]);
+});
+
+test("a fever brings a healer's hut, children a play area, crowding a family house, deaths a memorial", async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(PROJECT_HELPERS + `(() => {
+    // Healer: after an outbreak; the sick then rest there, and the fever is cut short.
+    w.lastOutbreak = w.time;
+    const healer = done(idea('healer'));
+    const sick = w.thrimps[3];
+    if (sick.job) finishJob(sick, w, true);
+    fallSick(sick, w);
+    const before = sick.sick.until - w.time;
+    if (healer) { sick.x = sick.px = healer.door.x; sick.y = sick.py = healer.door.y; }
+    startJob(sick, w, makeSleepJob(sick, w), 'sleep');
+    // A few steps in through the door (or, if something got in the way, the next time they choose to rest).
+    for (let m = 0; m < 60 && !sick.inHealer; m += 5) thrimp.run(5);
+    const cared = !!sick.inHealer && sick.sick.until - w.time < before * 0.7;
+    // Family house: a couple and their children overflowing a hut.
+    const [a, b] = w.thrimps.filter(t => t.partner && t.home).slice(0, 1).flatMap(t => [t, byId(w, t.partner)]);
+    // (No running time here: the colony's own hourly planning would start these first.)
+    const kids = [0, 1].map(() => { const k = makeThrimp(w, a.x, a.y, a.home, 2); k.parents = [a.id, b.id]; w.thrimps.push(k); return k; });
+    const house = done(idea('house'));
+    const movedIn = !!house && [a, b, ...kids].every(t => t.home === house.id);
+    // Play area: three or more children.
+    w.thrimps.push(makeThrimp(w, a.x, a.y, a.home, 3));
+    const pg = done(idea('playground'));
+    if (pg) { kids[0].x = kids[0].px = pg.x + 60; kids[0].y = kids[0].py = pg.y; } // a child out playing nearby
+    const play = makePlayJob(kids[0], w).title;
+    // Memorial: after three deaths, by the graveyard.
+    for (const t of w.thrimps.filter(t => ![a, b, ...kids, sick].includes(t)).slice(0, 3)) markDead(t, w, 'old age');
+    processDeaths(w);
+    const stone = done(idea('memorial'));
+    return { failed, cared, movedIn, play, nearGraves: !!stone && dist(stone.x, stone.y, w.graveyard.x, w.graveyard.y) < 90 };
+  })()`);
+  expect(r).toEqual({ failed: [], cared: true, movedIn: true, play: 'Off to the play area', nearGraves: true });
+  expect(errors).toEqual([]);
+});
+
+test('a campfire gathers people in the evening', async ({ page }) => {
+  const errors = await open(page);
+  const r = await page.evaluate(PROJECT_HELPERS + `(() => {
+    w.time += 3 * DAY; // the colony has been here a few days (a campfire comes on day 4, or sooner if they're lonely)
+    const fire = done(idea('campfire'));
+    w.weather.kind = 'clear'; w.weather.until = w.time + 3 * DAY; // a dry evening
+    const to = Math.floor(w.time / DAY) * DAY + DAY + 18.5 * HOUR; // the next evening
+    while (w.time < to) thrimp.run(10);
+    let most = 0;
+    for (let m = 0; m < 3 * HOUR; m += 10) { thrimp.run(10); most = Math.max(most, w.thrimps.filter(t => t.job && t.job.type === 'campfire').length); }
+    return { fire: !!fire, most };
+  })()`);
+  expect(r.fire).toBe(true);
+  expect(r.most).toBeGreaterThanOrEqual(3);
+  expect(errors).toEqual([]);
+});
+
 // Pacing baseline: 12 Thrimps, one game day (7,200 ticks) took 25 ms in Edge on Rasmus's PC (2026-10-22).
 // The limit is generous on purpose; it is there to catch something going badly wrong, not small slowdowns.
 test('one game day simulates in under 1.5 seconds', async ({ page }) => {

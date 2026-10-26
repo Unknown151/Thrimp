@@ -43,7 +43,9 @@ function updateUI() {
   $('hud-save').textContent = saveStatus();
   $('hud-build').textContent = world.sites.map(s => {
     const names = s.owners.map(id => byId(world, id)).filter(Boolean).map(t => t.name).join(' & ');
-    return `Building a hut for ${names}: stage ${siteStage(s) + 1}/3, ${Math.round(s.work / HUT_WORK * 100)}%`;
+    const pct = `${Math.round(s.work / siteWork(s) * 100)}%`;
+    return siteType(s) === 'hut' ? `Building a hut for ${names}: stage ${siteStage(s) + 1}/3, ${pct}`
+      : `Building ${siteWhat(s)} (${names}'s idea): ${pct}`;
   }).join('\n');
   document.querySelectorAll('#speed button').forEach(b => b.classList.toggle('on', +b.dataset.speed === game.speedIndex));
 
@@ -170,12 +172,13 @@ function thingAt(wx, wy) {
   const hits = [];
   const test = (kind, id, y, box) => { if (wx >= box.x0 && wx <= box.x1 && wy >= box.y0 && wy <= box.y1) hits.push({ kind, id, y }); };
   for (const s of world.sites) {
-    const look = art(SITE_STAGES[siteStage(s)]);
+    const look = siteArt(s);
     test('site', s.id, s.p.y, look ? spriteBox(look, s.p.x, s.p.y) : { x0: s.p.x - s.p.w / 2, x1: s.p.x + s.p.w / 2, y0: s.p.y - s.p.h, y1: s.p.y });
   }
   for (const b of world.buildings) {
+    const look = art(b.art) || sprites[b.type];
     if (b.type === 'lumberyard') test('building', b.id, b.y, { x0: b.x - 50, x1: b.x + 40, y0: b.y - 34, y1: b.y + 6 });
-    else test('building', b.id, b.y, spriteBox(art(b.art) || sprites[b.type], b.x, b.y));
+    else if (look) test('building', b.id, b.y, spriteBox(look, b.x, b.y));
   }
   for (const b of world.bushes) test('bush', b.id, b.y, spriteBox(art('bush-full') || sprites.bush, b.x, b.y));
   for (const g of world.graves) { const s = graveArt(g); if (s) test('grave', g.id, g.y, spriteBox(s, g.x, g.y)); }
@@ -210,14 +213,46 @@ function updateThingPanel() {
   const doing = (test) => world.thrimps.filter(t => t.job && test(t));
   let title = '';
   const k = game.thing.kind;
-  if (k === 'building' && obj.type === 'hut') {
+  const built = () => obj.builtDay
+    ? rows.push(['Built', [`day ${obj.builtDay} by `, ...namesOf(obj.builtBy.map(id => byId(world, id)).filter(Boolean))]])
+    : rows.push(['Built', 'before anyone remembers']);
+  const at = (jobType) => namesOf(doing(t => t.job.type === jobType));
+  if (k === 'building' && BUILDING_TYPES[obj.type].home) {
     title = obj.label;
-    const residents = world.thrimps.filter(t => t.home === obj.id);
+    const residents = world.thrimps.filter(t => t.home === obj.id), room = BUILDING_TYPES[obj.type].room;
     rows.push(['Home of', residents.length ? namesOf(residents) : 'nobody yet']);
+    if (residents.length > room) rows.push(['Room', `crowded: ${residents.length} living in room for ${room}`]);
     const inside = world.thrimps.filter(t => t.hidden && t.home === obj.id);
     rows.push(['Inside now', inside.length ? namesOf(inside) : 'nobody']);
-    if (obj.builtDay) rows.push(['Built', [`day ${obj.builtDay} by `, ...namesOf(obj.builtBy.map(id => byId(world, id)).filter(Boolean))]]);
-    else rows.push(['Built', 'before anyone remembers']);
+    built();
+  } else if (k === 'building' && obj.type === 'campfire') {
+    title = 'The campfire';
+    rows.push(['Fire', fireLit() ? 'burning' : 'cold until the evening']);
+    rows.push(['Round the fire', at('campfire')]);
+    built();
+  } else if (k === 'building' && obj.type === 'shelter') {
+    title = 'The rain shelter';
+    rows.push(['Sheltering', at('shelter')]);
+    built();
+  } else if (k === 'building' && obj.type === 'storehouse') {
+    title = 'The storehouse';
+    rows.push(['Keeps dry', `${Math.floor(world.stock.food)} berries`]);
+    rows.push(['Spoiled before it was built', `${world.stats.spoiled || 0} berries`]);
+    built();
+  } else if (k === 'building' && obj.type === 'healer') {
+    title = 'The healer\'s hut';
+    rows.push(['Being cared for', namesOf(world.thrimps.filter(t => obj.sleepers.includes(t.id)))]);
+    rows.push(['Sick elsewhere', namesOf(world.thrimps.filter(t => t.sick && !obj.sleepers.includes(t.id)))]);
+    built();
+  } else if (k === 'building' && obj.type === 'memorial') {
+    title = 'The memorial stone';
+    rows.push(['In memory of', `${world.dead.length} who have died`]);
+    rows.push(['Remembering now', namesOf(doing(t => t.job.steps[t.job.i].label === 'Relaxing by the memorial stone'))]);
+    built();
+  } else if (k === 'building' && obj.type === 'playground') {
+    title = 'The play area';
+    rows.push(['Playing now', namesOf(doing(t => t.job.title === 'Off to the play area'))]);
+    built();
   } else if (k === 'building' && obj.type === 'canteen') {
     title = 'The canteen';
     rows.push(['Food in store', `${Math.floor(world.stock.food)} berries${world.crate.broken ? ' (crate smashed: spoiling!)' : ''}`]);
@@ -230,10 +265,11 @@ function updateThingPanel() {
     rows.push(['Wood stacked', `${world.stock.wood} logs`]);
     rows.push(['Chopping now', namesOf(doing(t => t.job.type === 'chop'))]);
   } else if (k === 'site') {
-    title = 'A hut going up';
-    rows.push(['For', namesOf(obj.owners.map(id => byId(world, id)).filter(Boolean))]);
-    rows.push(['Progress', `stage ${siteStage(obj) + 1} of 3, ${Math.round(obj.work / HUT_WORK * 100)}%`]);
-    rows.push(['Wood delivered', `${obj.woodIn} of ${HUT_WOOD} logs`]);
+    const hutSite = siteType(obj) === 'hut', pct = Math.round(obj.work / siteWork(obj) * 100);
+    title = hutSite ? 'A hut going up' : `Building ${siteWhat(obj)}`;
+    rows.push([hutSite ? 'For' : 'Whose idea', namesOf(obj.owners.map(id => byId(world, id)).filter(Boolean))]);
+    rows.push(['Progress', hutSite ? `stage ${siteStage(obj) + 1} of 3, ${pct}%` : `${pct}%`]);
+    rows.push(['Wood delivered', `${obj.woodIn} of ${siteWood(obj)} logs`]);
     rows.push(['Working on it', namesOf(doing(t => t.job.type === 'build'))]);
     rows.push(['Started', `day ${dayOf(obj.started)}`]);
   } else if (k === 'bush') {

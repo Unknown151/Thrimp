@@ -29,10 +29,11 @@ function serializeWorld(w) {
     crate: { ...w.crate, repairBy: 0 }, store: w.store,
     shoreSpots: w.shoreSpots, noBuild: w.noBuild, dirtSpots: w.dirtSpots, sites: w.sites,
     dead: w.dead, graves: w.graves, graveyard: w.graveyard, lastOutbreak: w.lastOutbreak,
+    standingMeals: w.standingMeals || 0, lastSpoilAlert: w.lastSpoilAlert,
     thrimps: w.thrimps.map(th => {
       const { job, route, ...rest } = th;
       return { ...rest, moving: false, working: false, hidden: false, asleep: false, breaking: null, emote: null, trailCell: -1,
-        pose: null, gesture: null };
+        pose: null, gesture: null, inHealer: false };
     }),
     trailIdx, trailVal,
   };
@@ -47,6 +48,7 @@ function restoreWorld(d) {
     shoreSpots: d.shoreSpots, noBuild: d.noBuild, dirtSpots: d.dirtSpots, sites: d.sites || [], thrimps: d.thrimps,
     // Saves from before the life cycle have no dead, no graves and no ages: those start fresh (ensureLife).
     dead: d.dead || [], graves: d.graves || [], graveyard: d.graveyard || null, lastOutbreak: d.lastOutbreak,
+    standingMeals: d.standingMeals || 0, lastSpoilAlert: d.lastSpoilAlert,
   };
   for (const th of w.thrimps) ensureLife(th, w);
   buildTerrain(w);
@@ -57,8 +59,8 @@ function restoreWorld(d) {
   w.lumberyard = d.lumberyard ? w.byId.get(d.lumberyard) : null;
   w.seats = d.seats.map(s => ({ ...s, takenBy: 0, table: w.tables[s.table] }));
   // The walk grid isn't saved: re-mark every footprint and trunk.
-  for (const b of w.buildings) markSolid(w, b.x - b.w / 2, b.y - b.h, b.x + b.w / 2 - 1, b.y - 1);
-  for (const s of w.sites) markSolid(w, s.p.x - s.p.w / 2, s.p.y - s.p.h, s.p.x + s.p.w / 2 - 1, s.p.y - 1);
+  for (const b of w.buildings) if (isSolidType(b.type)) markSolid(w, b.x - b.w / 2, b.y - b.h, b.x + b.w / 2 - 1, b.y - 1);
+  for (const s of w.sites) if (isSolidType(s.p.type || 'hut')) markSolid(w, s.p.x - s.p.w / 2, s.p.y - s.p.h, s.p.x + s.p.w / 2 - 1, s.p.y - 1);
   for (const t of w.trees) markSolid(w, t.x - 2, t.y - 2, t.x + 2, t.y);
   for (const th of w.thrimps) { th.px = th.x; th.py = th.y; }
   initTrails(w);

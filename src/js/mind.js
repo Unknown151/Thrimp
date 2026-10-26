@@ -99,7 +99,14 @@ const THOUGHTS = {
   visited_grave:  { label: 'Sat by a loved one\'s grave', mood: 2, mins: 8 * HOUR },
   took_a_life:    { label: 'Killed someone', mood: -18, mins: 5 * DAY },
   killed_violent: { label: 'Killed someone', mood: -4, mins: 2 * DAY },
+  // Buildings (projects.js)
+  built_something:{ label: 'Built something for everyone', mood: 5, mins: 2 * DAY },
+  fireside:       { label: 'An evening by the fire', mood: 4, mins: 10 * HOUR },
+  remembered:     { label: 'Remembered them at the memorial stone', mood: 3, mins: DAY },
+  played:         { label: 'Played at the play area', mood: 4, mins: 8 * HOUR },
+  cared_for:      { label: 'Nursed back to health', mood: 5, mins: 2 * DAY },
   // Conditions: recomputed every refresh while they hold, so they last only as long as the cause.
+  crowded_home:   { label: 'Home is too crowded', mood: -4 },
   sick:           { label: 'Sick with a fever', mood: -8 },
   hurt:           { label: 'In pain', mood: -6 },
   frail:          { label: 'Old bones', mood: -2 },
@@ -141,6 +148,10 @@ function conditionThoughts(th, w) {
   if (n.social < 0.2) out.push('lonely');
   if (th.partner) out.push('in_love');
   if (!th.home) out.push('homeless');
+  else {
+    const home = w.byId.get(th.home), T = home && BUILDING_TYPES[home.type];
+    if (T && T.home && residentsOf(w, home).length > T.room) out.push('crowded_home');
+  }
   if (th.sick) out.push('sick');
   if (th.health < 0.5) out.push('hurt');
   if (th.stage === 'elder') out.push('frail');
@@ -264,7 +275,10 @@ function makeSmashJob(th, w) {
       begin: t => { t.dir = side < 0 ? 'east' : 'west'; t.working = 'chop'; },
       finish: t => {
         o.broken = true;
-        if (target.kind === 'crate') w.stock.food -= Math.floor(w.stock.food * 0.4); // berries everywhere
+        if (target.kind === 'crate') { // berries everywhere (with a storehouse, only what was in the crate)
+          w.stock.food -= Math.floor((buildingOf(w, 'storehouse') ? Math.min(w.stock.food, CRATE_HOLDS) : w.stock.food) * 0.4);
+          w.stats.crate_smashed = (w.stats.crate_smashed || 0) + 1;
+        }
         remember(t, w, target.kind === 'crate' ? 'Smashed the food crate, berries everywhere' : 'Smashed a canteen table');
         raiseAlert(w, `${t.name} smashed ${target.kind === 'crate' ? 'the food crate' : 'a canteen table'}!`, o.x, o.y, [t.id]);
       },

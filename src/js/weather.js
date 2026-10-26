@@ -34,8 +34,11 @@ function weatherThoughts(th, w) {
   const h = hourOf(w.time);
   if (isRaining(w)) {
     if (th.hidden && th.asleep) addThought(th, w, 'rain_on_roof');
-    else if (!th.hidden) {
-      if (!th.thoughts.some(t => t.id === 'got_soaked')) emote(th, w, 'rain', 15); // caught out: a little cloud
+    else if (!th.hidden && !underShelter(th, w)) {
+      if (!th.thoughts.some(t => t.id === 'got_soaked')) { // caught out: a little cloud, and one more reason for a shelter
+        emote(th, w, 'rain', 15);
+        w.stats.soaked = (w.stats.soaked || 0) + 1;
+      }
       addThought(th, w, 'got_soaked');
     }
   } else if (w.weather.kind === 'clear' && h >= 10 && h < 16 && !th.hidden && !th.asleep && chance(0.15)) {

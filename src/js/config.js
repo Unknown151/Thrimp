@@ -56,14 +56,24 @@ const OBJECT_ART = [
   'log', 'chopping-block',
   'oak-1', 'oak-2', 'oak-small', 'pine-1', 'pine-2', 'stump', 'bush-full', 'bush-bare',
   'rocks', 'flowers', 'reeds', 'basket', 'hut-stage-1', 'hut-stage-2', 'hut-stage-3', 'grave', 'grave-old',
+  'house-big', 'campfire', 'shelter', 'storehouse', 'healer-hut', 'memorial', 'playground',
 ];
 const TREE_ART = { oak: ['oak-1', 'oak-2', 'oak-small'], pine: ['pine-1', 'pine-2'] };
 
 // w and h are the footprint (solid ground) when there's no art; with art, w is the drawn width minus a margin.
+// `solid: false` buildings can be walked into (a shelter's floor, a play area); `home` ones are lived in, holding up
+// to `room` before they feel crowded.
 const BUILDING_TYPES = {
-  hut:        { label: 'Hut',        w: 54, h: 30, art: ['hut-a', 'hut-b', 'hut-c'] },
+  hut:        { label: 'Hut',        w: 54, h: 30, art: ['hut-a', 'hut-b', 'hut-c'], home: true, room: 3 },
   canteen:    { label: 'Canteen',    w: 100, h: 38, art: ['canteen'] },
   lumberyard: { label: 'Lumberyard', w: 52, h: 14 },
+  house:      { label: 'House',      w: 70, h: 34, art: ['house-big'], home: true, room: 7 },
+  campfire:   { label: 'Campfire',   w: 16, h: 8, art: ['campfire'] },
+  shelter:    { label: 'Rain shelter', w: 44, h: 22, art: ['shelter'], solid: false },
+  storehouse: { label: 'Storehouse', w: 40, h: 26, art: ['storehouse'] },
+  healer:     { label: 'Healer\'s hut', w: 50, h: 28, art: ['healer-hut'] },
+  memorial:   { label: 'Memorial stone', w: 12, h: 8, art: ['memorial'] },
+  playground: { label: 'Play area',  w: 44, h: 18, art: ['playground'], solid: false },
 };
 
 // Screen directions in atan2 order (east = 0, clockwise because y points down).
